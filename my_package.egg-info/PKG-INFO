@@ -1,0 +1,11 @@
+Metadata-Version: 2.1
+Name: my_package
+Version: 0.1
+Summary: Some custom environment for the gymnasium library
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.6
+Requires-Dist: gymnasium
+Requires-Dist: numpy
+Requires-Dist: pygame

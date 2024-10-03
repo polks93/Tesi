@@ -1,0 +1,71 @@
+Divisione dell'Ostacolo in Sezioni:
+
+Dividi il bordo dell'ostacolo in diverse sezioni o segmenti distinti.
+Il numero di sezioni dovrebbe essere sufficientemente grande da garantire una copertura dettagliata, 
+ma non così grande da complicare eccessivamente il problema.
+
+
+Schema sistema:
+
+    Ambiente: Mantiene internamente una lista delle sezioni già viste dall'agente.
+
+    Agente: Non ha conoscenza diretta di quali sezioni ha già visto; l'informazione è gestita dall'ambiente.
+
+    Ricompense:
+
+        +1 quando l'agente vede per la prima volta una nuova sezione dell'ostacolo.
+        +10 quando l'agente mantiene l'ostacolo nel campo visivo per un certo numero di passi consecutivi (ad esempio, 10 passi).
+
+    Penalità:
+
+        -10 per collisione con l'ostacolo o uscita dai bordi dell'ambiente.
+        -0.01 per ogni passo senza vedere l'ostacolo, per incoraggiare l'esplorazione attiva.
+
+Parametri consigliati:
+
+Learning Rate: 0.0005 – Un valore leggermente più basso per stabilità.
+Fattore di Sconto (gamma): 0.95 – Valore leggermente più basso poiché le ricompense sono più immediate.
+Epsilon-Greedy Strategy:
+Epsilon Iniziale: 1.0
+Epsilon Minimo: 0.1
+Decay: Decadimento lineare su 5,000 passi.
+
+Architettura della Rete Neurale:
+
+Input Layer: Dimensione uguale al vettore delle osservazioni (ad esempio, 7 neuroni).
+Hidden Layers:
+    Primo Layer Nascosto: 64 neuroni, attivazione ReLU.
+    Secondo Layer Nascosto: 32 neuroni, attivazione ReLU.
+Output Layer: 3 neuroni (uno per ogni azione possibile).
+
+
+Nuove idee per ricompense:
+
+1)  Gli ostacoli possono avere dimensione variabile e verranno divisi in segmenti
+    di lunghezza fissa
+
+    Ricompensa che deve adattarsi alla dimensione del segmento per mantenere costante la ricompensa totale per 
+    aver ispezionato tutto l'ostacolo
+
+    Esempio Pratico:
+    Definizione dei Segmenti:
+
+    Segment Length (L): 1 unità.
+    Ostacolo A:
+    Perimetro: 10 unità.
+    Numero di Segmenti: 10.
+    Ricompensa per Segmento: +1 (Totale Potenziale: +10).
+    Ostacolo B:
+    Perimetro: 20 unità.
+    Numero di Segmenti: 20.
+    Ricompensa per Segmento: +0.5 (Totale Potenziale: +10).
+    Implementazione della Ricompensa:
+
+    Calcolo della Ricompensa per Segmento:
+    ricompensa_per_segmento = ricompensa_totale / numero_di_segmenti
+
+    PROBLEMA:   Questo sbilancia le ricompense ottenute per viste ripetute, generando episodi
+                con reward massima variabile.
+                
+2)  Ostacoli con perimetro costante:
+    Questo metodo permette di avere delle ricompense massime costanti

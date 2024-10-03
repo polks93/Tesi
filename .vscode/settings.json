@@ -1,0 +1,6 @@
+{
+    "python.analysis.typeCheckingMode": "basic",
+    "mypy-type-checker.ignorePatterns": [
+        "setuptools"
+    ]
+}
