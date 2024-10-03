@@ -124,7 +124,7 @@ class ShipQuestEnv(gym.Env):
         Cy = (self.max_y - self.min_y) / 2
         
         # Calcolo l'angolo theta tra il punto di spawn e il centro del workspace
-        theta = np.atan2(Cy - y, Cx - x)
+        theta = np.arctan2(Cy - y, Cx - x)
         # Aggiungo deviazione random all'angolo theta
         d_theta = np.random.uniform(-np.pi/6, np.pi/6)
         theta = theta + d_theta
@@ -511,7 +511,6 @@ class ShipQuestEnv(gym.Env):
         elif self.render_mode == "rgb_array":
             return np.transpose(np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2))
         
-
     def close(self):
         if self.screen is not None:
             pygame.display.quit()
