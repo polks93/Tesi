@@ -100,6 +100,68 @@ class ReplayBuffer:
         """
         return len(self.buffer)
 
+class ReplayBufferTensor:
+    """ Buffer per memorizzare le esperienze direttamente come tensori """
+    def __init__(self, capacity: int, state_dim: int, device: torch.device) -> None:
+
+        self.capacity = capacity
+        self.device = device
+        self.ptr = 0
+        self.size = 0
+
+        # Inizializzo i buffer per memorizzare le esperienze direttamente come tensori
+        self.states = torch.zeros((capacity, state_dim), dtype=torch.float32, device=device)
+        self.actions = torch.zeros((capacity, 1), dtype=torch.int64, device=device)
+        self.rewards = torch.zeros((capacity, 1), dtype=torch.float32, device=device)
+        self.next_states = torch.zeros((capacity, state_dim), dtype=torch.float32, device=device)
+        self.terminateds = torch.zeros((capacity, 1), dtype=torch.bool, device=device)
+    
+    def push(self, state: np.ndarray, action: int, reward: float, next_state: np.ndarray, terminated: bool) -> None:
+        """
+        Aggiunge una nuova esperienza < S, A, R, S', terminated > nel buffer.
+        Parametri:
+        - state: np.ndarray = Lo stato corrente dell'ambiente.
+        - action: int = L'azione eseguita nello stato corrente.
+        - reward: float = La ricompensa ottenuta eseguendo l'azione nello stato corrente.
+        - next_state: np.ndarray = Lo stato successivo dell'ambiente dopo aver eseguito l'azione.
+        - terminated: bool = Indica se l'episodio è terminato dopo aver eseguito l'azione.
+        Ritorno:
+        - None
+        """
+        idx = self.ptr % self.capacity
+        self.states[idx] = torch.tensor(state, dtype=torch.float32, device=self.device)
+        self.actions[idx] = torch.tensor(action, dtype=torch.int64, device=self.device)
+        self.rewards[idx] = torch.tensor(reward, dtype=torch.float32, device=self.device)
+        self.next_states[idx] = torch.tensor(next_state, dtype=torch.float32, device=self.device)
+        self.terminateds[idx] = torch.tensor(terminated, dtype=torch.bool, device=self.device)
+
+        # Incremento il puntatore e aggiorno la dimensione del buffer
+        self.ptr += 1
+        self.size = min(self.size + 1, self.capacity)
+    
+    def sample(self, batch_size: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Campiona un batch di esperienze dal buffer. Il batch contiene tanta esperienze quante definite in batch_size.
+        Args:
+            batch_size (int): La dimensione del batch da campionare.
+        Returns:
+            Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]: Una tupla contenente gli array NumPy dei
+            batch di stati, azioni, ricompense, prossimi stati e flag di terminazione.
+        """
+        idxs = torch.randint(0, self.size, (batch_size,), device=self.device)
+        batch_states = self.states[idxs]
+        batch_actions = self.actions[idxs]
+        batch_rewards = self.rewards[idxs]
+        batch_next_states = self.next_states[idxs]
+        batch_terminateds = self.terminateds[idxs]
+        return batch_states, batch_actions, batch_rewards, batch_next_states, batch_terminateds
+    
+    def __len__(self) -> int:
+        """
+        Restituisce il numero di esperienze attualmente memorizzate nel buffer.
+        """
+        return self.size
+
 def select_action(
         state: np.ndarray, 
         policy_net: torch.nn.Module, 
@@ -122,6 +184,10 @@ def select_action(
     # Azione casuale con probabilità epsilon
     if random.random() < epsilon:
         return random.randint(0, n_actions -1)
+
+    # if torch.rand(1).item() < epsilon:
+    #     random_action = int(torch.randint(0, n_actions, (1,)))
+    #     return random_action
         
     # Azione greedy con probabilità (1 - epsilon)
     with torch.no_grad():           # Disabilito il calcolo dei gradienti che non serve in questa fase
@@ -196,6 +262,59 @@ def optimize_model(
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
+    if debug:
+        return loss
+    else:
+        return None
+
+def optimize_model_tensor(        
+        policy_net: DQN, 
+        target_net: DQN, 
+        memory: ReplayBufferTensor, 
+        optimizer: Optimizer, 
+        batch_size: int, 
+        gamma: float, 
+        debug: bool = False
+        ) -> Optional[torch.Tensor]:
+    """
+    Ottimizza il modello di rete neurale utilizzando il metodo DQN (Deep Q-Learning). (Versione con tensori)
+    Args:
+        policy_net (DQN): La rete neurale principale che viene addestrata.
+        target_net (DQN): La rete neurale target utilizzata per calcolare i target Q-values.
+        memory (ReplayBufferTensor): Il buffer di replay che contiene le esperienze passate sottoforma di tensori.
+        optimizer (Optimizer): L'ottimizzatore utilizzato per aggiornare i pesi della rete.
+        batch_size (int): La dimensione del batch di esperienze da campionare dal buffer.
+        gamma (float): Il fattore di sconto per il calcolo dei Q-values.
+        debug (bool, optional): Se True, restituisce la perdita calcolata per il debug. Default è False.
+    Returns:
+        Optional[torch.Tensor]: La perdita calcolata se debug è True, altrimenti None.
+    """
+    # Check memory size
+    if len(memory) < batch_size:
+        warnings.warn(f"Il replay buffer contiene solo {len(memory)} esperienze, meno del batch size richiesto ({batch_size}).", 
+                      category=UserWarning)
+        return None
+
+    # Sample di un batch direttamente come tensore
+    states, actions, rewards, next_states, terminateds = memory.sample(batch_size)
+
+    # Calcolo dei Q-values predetti dalla rete principale per le azioni eseguite
+    q_values = policy_net(states).gather(1, actions)
+
+    # Calcolo dei Q-values massimi previsti dalla rete target per gli stati successivi
+    next_q_values = target_net(next_states).max(1, keepdim=True)[0]
+
+    # Calcolo dei target Q-values
+    target_q_values = rewards + gamma * next_q_values * (1 - terminateds.int())
+
+    # Calcolo della perdita tra i valori predetti dalla rete principale e quelli della rete target
+    loss = nn.MSELoss()(q_values, target_q_values.detach())
+    # Ottimizzo il modello
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+    # Restituisco la loss se debug è True
     if debug:
         return loss
     else:

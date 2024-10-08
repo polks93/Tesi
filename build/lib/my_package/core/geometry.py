@@ -25,7 +25,7 @@ class Segment:
 
     metadata = {'valid_sides': ['top', 'bottom', 'left', 'right']}
 
-    def __init__(self, id: int, start_point: Union[Sequence, np.ndarray], end_point: Union[Sequence, np.ndarray], side: str):
+    def __init__(self, id: int, start_point: Union[Sequence, np.ndarray], end_point: Union[Sequence, np.ndarray], side: str, neighbor: Optional[str] = None):
         if side not in self.metadata['valid_sides']:
             raise ValueError(f"Invalid side: {side}. Valid sides are: {self.metadata['valid_sides']}")
         
@@ -35,6 +35,7 @@ class Segment:
         self.mid_point = ((start_point[0] + end_point[0]) / 2,
                             (start_point[1] + end_point[1]) / 2)
         self.side = side
+        self.neighbor = neighbor
         self.seen = False
 
 def generate_segments_for_side(
@@ -62,6 +63,22 @@ def generate_segments_for_side(
     side_length = np.linalg.norm(end_point - start_point)
     num_segments = int(np.ceil(side_length / segment_length))
 
+    match(side):
+        case 'bottom':
+            start_neighbor = 'left'
+            end_neighbor = 'right'
+        case 'top':
+            start_neighbor = 'left'
+            end_neighbor = 'right'
+        case 'left':
+            start_neighbor = 'bottom'
+            end_neighbor = 'top'
+        case 'right':
+            start_neighbor = 'bottom'
+            end_neighbor = 'top'
+        case _:
+            raise ValueError(f"Invalid side: {side}. Valid sides are: {Segment.metadata['valid_sides']}")
+
     # Aggiusto la lunghezze dei segmenti in caso length non sia un multiplo di segment_length
     if num_segments > 0:
         segment_length = float(side_length) / num_segments
@@ -73,10 +90,19 @@ def generate_segments_for_side(
     points = np.linspace(start_point, end_point, num=num_segments + 1)
     segments = {}
     id = segment_id
+
     for i in range(num_segments):
         sp = points[i]  
         ep = points[i + 1]
-        segment = Segment(id=id, start_point=sp, end_point=ep, side=side)
+
+        if i == 0:
+            neighbor = start_neighbor
+        elif i == num_segments - 1:
+            neighbor = end_neighbor
+        else:
+            neighbor = None
+
+        segment = Segment(id=id, start_point=sp, end_point=ep, side=side, neighbor=neighbor)
         segments[id] = segment
         id += 1
     return segments, id
@@ -354,14 +380,13 @@ if __name__ == "__main__":
     # print(is_segment_visible(pose, segment, obstacle, lidar_parameters))  # True
 
     """Test generate_segments_for_side"""
-    # obstacle = [0, 0, 2, 2]
-    # segment_length = 0.5
-    # rect = Rectangle(obstacle, segment_length)
+    obstacle = [0, 0, 2, 2]
+    segment_length = 0.5
+    segments = generate_segments(obstacle, segment_length)
+    # segments = generate_segments(obstacle, segment_length)
 
-    # # segments = generate_segments(obstacle, segment_length)
-
-    # for id, segment in rect.segments.items():
-    #     print(f"Segment {id}: {segment.start_point} -> {segment.end_point} ({segment.side})")
+    for id, segment in segments.items():
+        print(f"Segment {id}: {segment.start_point} -> {segment.end_point} ({segment.side}), neighbor: {segment.neighbor}")
 
     """Test intersezione segmenti """
     # segment1 = [(-1, -1), (2, 2)]
@@ -379,40 +404,40 @@ if __name__ == "__main__":
     # vec = find_sectors_indices(n_beams, n_sectors)
     # print(vec)
     """" Test ostacolo random """
-    workspace = (0, 0, 8, 8)
-    safe_distance = 2
-    obstacle_perimeter = 12
-    for i in range(10):
-        rectangle = generate_random_obstacle(obstacle_perimeter, workspace, safe_distance)
-        print(rectangle)
+    # workspace = (0, 0, 8, 8)
+    # safe_distance = 2
+    # obstacle_perimeter = 12
+    # for i in range(10):
+    #     rectangle = generate_random_obstacle(obstacle_perimeter, workspace, safe_distance)
+    #     print(rectangle)
         
-        # Estrai i limiti dall'area di lavoro e dal rettangolo
-        wxmin, wymin, wxmax, wymax = workspace
-        rxmin, rymin, rxmax, rymax = rectangle
+    #     # Estrai i limiti dall'area di lavoro e dal rettangolo
+    #     wxmin, wymin, wxmax, wymax = workspace
+    #     rxmin, rymin, rxmax, rymax = rectangle
 
-        # Crea la figura e l'asse
-        fig, ax = plt.subplots()
+    #     # Crea la figura e l'asse
+    #     fig, ax = plt.subplots()
 
-        # Imposta i limiti dell'area di lavoro
-        ax.set_xlim(wxmin, wxmax)
-        ax.set_ylim(wymin, wymax)
+    #     # Imposta i limiti dell'area di lavoro
+    #     ax.set_xlim(wxmin, wxmax)
+    #     ax.set_ylim(wymin, wymax)
 
-        # Disegna le 4 linee del rettangolo
-        # Lato inferiore
-        ax.plot([rxmin, rxmax], [rymin, rymin], color='r', linewidth=2)
-        # Lato superiore
-        ax.plot([rxmin, rxmax], [rymax, rymax], color='r', linewidth=2)
-        # Lato sinistro
-        ax.plot([rxmin, rxmin], [rymin, rymax], color='r', linewidth=2)
-        # Lato destro
-        ax.plot([rxmax, rxmax], [rymin, rymax], color='r', linewidth=2)
+    #     # Disegna le 4 linee del rettangolo
+    #     # Lato inferiore
+    #     ax.plot([rxmin, rxmax], [rymin, rymin], color='r', linewidth=2)
+    #     # Lato superiore
+    #     ax.plot([rxmin, rxmax], [rymax, rymax], color='r', linewidth=2)
+    #     # Lato sinistro
+    #     ax.plot([rxmin, rxmin], [rymin, rymax], color='r', linewidth=2)
+    #     # Lato destro
+    #     ax.plot([rxmax, rxmax], [rymin, rymax], color='r', linewidth=2)
 
-        # Etichetta degli assi e titolo
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_title('Perimetro del rettangolo all\'interno dell\'area di lavoro')
+    #     # Etichetta degli assi e titolo
+    #     ax.set_xlabel('X')
+    #     ax.set_ylabel('Y')
+    #     ax.set_title('Perimetro del rettangolo all\'interno dell\'area di lavoro')
 
-        # Mostra la griglia e il grafico
-        ax.grid(True)
-        plt.gca().set_aspect('equal', adjustable='box')
-        plt.show()
+    #     # Mostra la griglia e il grafico
+    #     ax.grid(True)
+    #     plt.gca().set_aspect('equal', adjustable='box')
+    #     plt.show()

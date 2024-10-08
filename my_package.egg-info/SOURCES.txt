@@ -17,5 +17,7 @@ my_package/envs/grid_world.py
 my_package/envs/reward_explorer.py
 my_package/envs/ship.py
 my_package/envs/ship_quest.py
+my_package/envs/ship_quest_v1.py
+my_package/envs/ship_quest_v2.py
 my_package/registration/__init__.py
 my_package/registration/register.py
