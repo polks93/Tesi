@@ -9,6 +9,12 @@ from my_package         import Unicycle, generate_segments
 from my_package.core    import generate_random_obstacle, is_segment_visible, proximity_sensor
 
 class ShipQuestEnv(gym.Env):
+    """ UPGRADED VERSION OF ShipQuestEnv_v1
+     Le differenze principali rispetto alla versione precedente sono:
+     - Nuova gestione delle reward:
+        - L'agente riceve una reward in base all'orientamento rispetto alla superficie dell'ostacolo
+        - Aggiunta reward totale, dopo aver raggiunto max_steps, in base al coverage del perimetro 
+        """
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
     def __init__(
@@ -375,7 +381,8 @@ class ShipQuestEnv(gym.Env):
         if theta_normal is not None:
             theta_agent = self.agent.get_state()[2]
             theta_diff = np.arctan2(np.sin(theta_agent - theta_normal), np.cos(theta_agent - theta_normal))
-            reward += float(r_theta * (np.pi - abs(theta_diff)) / np.pi)
+            if abs(theta_diff) < np.pi/4:
+                reward += float(r_theta * (1 - abs(theta_diff)/ (np.pi/4) ))
 
         reward += new_segments_seen * r_new_segment + obstacle_in_FoV * r_obstacole_in_FoV
 
@@ -404,7 +411,9 @@ class ShipQuestEnv(gym.Env):
             terminated = True
         
         elif self.step_count >= self.max_steps:
-            reward += r_time_limit
+            seen_segments = sum(1 for segment in self.segments.values() if segment.seen)
+            coverage = round(seen_segments / self.n_segments, 2)
+            reward += r_time_limit + coverage * r_goal
             self.status['time_limit'] = True
             terminated = True
 

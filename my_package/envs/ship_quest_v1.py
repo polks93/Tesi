@@ -9,6 +9,12 @@ from my_package         import Unicycle, generate_segments
 from my_package.core    import generate_random_obstacle, is_segment_visible, proximity_sensor
 
 class ShipQuestEnv(gym.Env):
+    """ UPGRADED VERSION OF ShipQuestEnv
+    Le differenze principali rispetto alla versione precedente sono:
+    - Aggiunta dizionario Options come input per tutti i parametri dell'ambiente
+    - Utilizzo dei dati completi del LiDAR per l'osservazione
+    - Possibilità di selezionare 3 o 5 azioni
+    """
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
     def __init__(
