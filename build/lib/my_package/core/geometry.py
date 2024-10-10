@@ -380,13 +380,13 @@ if __name__ == "__main__":
     # print(is_segment_visible(pose, segment, obstacle, lidar_parameters))  # True
 
     """Test generate_segments_for_side"""
-    obstacle = [0, 0, 2, 2]
-    segment_length = 0.5
-    segments = generate_segments(obstacle, segment_length)
+    # obstacle = [0, 0, 2, 2]
+    # segment_length = 0.5
     # segments = generate_segments(obstacle, segment_length)
+    # # segments = generate_segments(obstacle, segment_length)
 
-    for id, segment in segments.items():
-        print(f"Segment {id}: {segment.start_point} -> {segment.end_point} ({segment.side}), neighbor: {segment.neighbor}")
+    # for id, segment in segments.items():
+    #     print(f"Segment {id}: {segment.start_point} -> {segment.end_point} ({segment.side}), neighbor: {segment.neighbor}")
 
     """Test intersezione segmenti """
     # segment1 = [(-1, -1), (2, 2)]
@@ -404,40 +404,40 @@ if __name__ == "__main__":
     # vec = find_sectors_indices(n_beams, n_sectors)
     # print(vec)
     """" Test ostacolo random """
-    # workspace = (0, 0, 8, 8)
-    # safe_distance = 2
-    # obstacle_perimeter = 12
-    # for i in range(10):
-    #     rectangle = generate_random_obstacle(obstacle_perimeter, workspace, safe_distance)
-    #     print(rectangle)
+    workspace = (0, 0, 8, 8)
+    safe_distance = 2
+    obstacle_perimeter = 12
+    for i in range(10):
+        rectangle = generate_random_obstacle(obstacle_perimeter, workspace, safe_distance)
+        print(rectangle)
         
-    #     # Estrai i limiti dall'area di lavoro e dal rettangolo
-    #     wxmin, wymin, wxmax, wymax = workspace
-    #     rxmin, rymin, rxmax, rymax = rectangle
+        # Estrai i limiti dall'area di lavoro e dal rettangolo
+        wxmin, wymin, wxmax, wymax = workspace
+        rxmin, rymin, rxmax, rymax = rectangle
 
-    #     # Crea la figura e l'asse
-    #     fig, ax = plt.subplots()
+        # Crea la figura e l'asse
+        fig, ax = plt.subplots()
 
-    #     # Imposta i limiti dell'area di lavoro
-    #     ax.set_xlim(wxmin, wxmax)
-    #     ax.set_ylim(wymin, wymax)
+        # Imposta i limiti dell'area di lavoro
+        ax.set_xlim(wxmin, wxmax)
+        ax.set_ylim(wymin, wymax)
 
-    #     # Disegna le 4 linee del rettangolo
-    #     # Lato inferiore
-    #     ax.plot([rxmin, rxmax], [rymin, rymin], color='r', linewidth=2)
-    #     # Lato superiore
-    #     ax.plot([rxmin, rxmax], [rymax, rymax], color='r', linewidth=2)
-    #     # Lato sinistro
-    #     ax.plot([rxmin, rxmin], [rymin, rymax], color='r', linewidth=2)
-    #     # Lato destro
-    #     ax.plot([rxmax, rxmax], [rymin, rymax], color='r', linewidth=2)
+        # Disegna le 4 linee del rettangolo
+        # Lato inferiore
+        ax.plot([rxmin, rxmax], [rymin, rymin], color='r', linewidth=2)
+        # Lato superiore
+        ax.plot([rxmin, rxmax], [rymax, rymax], color='r', linewidth=2)
+        # Lato sinistro
+        ax.plot([rxmin, rxmin], [rymin, rymax], color='r', linewidth=2)
+        # Lato destro
+        ax.plot([rxmax, rxmax], [rymin, rymax], color='r', linewidth=2)
 
-    #     # Etichetta degli assi e titolo
-    #     ax.set_xlabel('X')
-    #     ax.set_ylabel('Y')
-    #     ax.set_title('Perimetro del rettangolo all\'interno dell\'area di lavoro')
+        # Etichetta degli assi e titolo
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_title('Perimetro del rettangolo all\'interno dell\'area di lavoro')
 
-    #     # Mostra la griglia e il grafico
-    #     ax.grid(True)
-    #     plt.gca().set_aspect('equal', adjustable='box')
-    #     plt.show()
+        # Mostra la griglia e il grafico
+        ax.grid(True)
+        plt.gca().set_aspect('equal', adjustable='box')
+        plt.show()

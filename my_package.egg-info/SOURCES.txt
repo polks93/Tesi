@@ -10,6 +10,7 @@ my_package/core/RL.py
 my_package/core/__init__.py
 my_package/core/geometry.py
 my_package/core/lidar_simulator.py
+my_package/core/ship_functions.py
 my_package/core/unicycle.py
 my_package/envs/__init__.py
 my_package/envs/cliff.py
@@ -19,5 +20,6 @@ my_package/envs/ship.py
 my_package/envs/ship_quest.py
 my_package/envs/ship_quest_v1.py
 my_package/envs/ship_quest_v2.py
+my_package/envs/ship_quest_v3.py
 my_package/registration/__init__.py
 my_package/registration/register.py

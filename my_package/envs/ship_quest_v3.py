@@ -9,11 +9,12 @@ from my_package         import Unicycle, generate_segments
 from my_package.core    import generate_random_obstacle, is_segment_visible, proximity_sensor
 
 class ShipQuestEnv(gym.Env):
-    """ UPGRADED VERSION OF ShipQuestEnv_v1
-     Le differenze principali rispetto alla versione precedente sono:
-     - Nuova gestione delle reward:
-        - L'agente riceve una reward in base all'orientamento rispetto alla superficie dell'ostacolo
-        """
+    """ UPGRADED VERSION OF ShipQuestEnv-v1
+    Le differenze principali rispetto alla versione precedente sono:
+    - Sensori di prossimità laterali che restituiscono un range
+    - Range dei sensori di prossimità aggiunto come osservazione al posto del valore binario
+
+    """
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
     def __init__(
@@ -56,6 +57,7 @@ class ShipQuestEnv(gym.Env):
                 self.num_observation            = 3 + 2 + Options['lidar_params']['n_beams']
                 self.proximity_sensor_heading   = Options['lateral_proximity_sensor_heading']
                 self.draw_proximity_sensor      = Options['draw_proximity_sensor']
+                self.proximity_sensor_range     = Options['proximity_sensor_range']
             else:
                 self.num_observation = 3 + Options['lidar_params']['n_beams']
                 self.draw_proximity_sensor = False
@@ -164,10 +166,10 @@ class ShipQuestEnv(gym.Env):
         observation[2]      = norm_theta                # Orientamento
         observation[3:13]   = norm_ranges               # Dati LiDAR
 
-        # Sensori di prossimita laterali
+        # Sensori di prossimita laterali normalizzati
         if self.proximity_sensor:
-            observation[13] = proximity_sensor(state, self.proximity_sensor_heading[0], self.lateral_safe_distance, self.ship)       # Allerta prossimità sinistra
-            observation[14] = proximity_sensor(state, self.proximity_sensor_heading[1], self.lateral_safe_distance, self.ship)       # Allerta prossimità destra
+            observation[13] = proximity_sensor(state, self.proximity_sensor_heading[0], self.proximity_sensor_range, self.ship, return_type='range') / self.proximity_sensor_range      # Allerta prossimità sinistra
+            observation[14] = proximity_sensor(state, self.proximity_sensor_heading[1], self.proximity_sensor_range, self.ship, return_type='range') / self.proximity_sensor_range      # Allerta prossimità destra
 
         return observation
     
@@ -274,29 +276,8 @@ class ShipQuestEnv(gym.Env):
             raise ValueError(f"Number of actions {self.n_actions} is not valid.")
 
         return omega
-
-    def calculate_normal_angle(self, sides: list, side_normals: Dict[str, np.ndarray]) -> Optional[np.float64]:
-        """
-        Calcola la normale basata sui lati forniti e le normali dei lati.
-        Args:
-            sides (list): Lista di lati per i quali calcolare la normale.
-            side_normals (Dict[str, np.ndarray]): Dizionario che mappa i lati alle loro normali.
-        Returns:
-            Optional[np.float64]: L'angolo della normale calcolata in radianti, oppure None se il numero di lati è diverso da 1 o 2.
-        """
-
-        if len(sides) == 1:
-            normal = side_normals[sides[0]]
-            return np.arctan2(normal[1], normal[0])
-        
-        elif len(sides) == 2:
-            normal = side_normals[sides[0]] + side_normals[sides[1]]
-            return np.arctan2(normal[1], normal[0])
-        
-        else:
-            return None
-        
-    def segments_check(self) -> Tuple[int, bool, Optional[np.float64]]:
+    
+    def segments_check(self) -> Tuple[int, bool]:
         """
         Verifica la visibilità dei segmenti e aggiorna il loro stato.
         Questa funzione controlla se i segmenti sono visibili dall'agente e aggiorna lo stato di visibilità dei segmenti.
@@ -307,35 +288,16 @@ class ShipQuestEnv(gym.Env):
         new_segnments = 0
         any_segment_seen = False
         pose = self.agent.get_state()[:3]
-        seen_sides = set()
 
-        # Definizione delle normali per ciascun lato del rettangolo
-        side_normals = {
-            'right': np.array([-1, 0]),   # Normale verso sinistra
-            'top': np.array([0, -1]),     # Normale verso il basso
-            'left': np.array([1, 0]),     # Normale verso destra
-            'bottom': np.array([0, 1]),   # Normale verso l'alto
-        }
         for i in range(self.n_segments):
-            
-            # Controllo segmenti visibili
-            if is_segment_visible(pose, self.segments[i], self.ship, self.lidar_params):
-                
-                # Update seen sides che considera anche i lati confinanti con un angolo
-                seen_sides.add(self.segments[i].side)
-                if self.segments[i].neighbor is not None:
-                    seen_sides.add(str(self.segments[i].neighbor))
 
-                # Flag che indica se almeno un segmento è stato visto
+            if is_segment_visible(pose, self.segments[i], self.ship, self.lidar_params):
                 any_segment_seen = True
-                
-                # Aggiorno lo stato del segmento
                 if self.segments[i].seen == False:
                     self.segments[i].seen = True
                     new_segnments += 1
 
-        normal_angle = self.calculate_normal_angle(list(seen_sides), side_normals)
-        return new_segnments, any_segment_seen, normal_angle
+        return new_segnments, any_segment_seen
 
     def goal_check(self) -> bool:
         """
@@ -363,8 +325,7 @@ class ShipQuestEnv(gym.Env):
         r_time_step = - 0.01
         r_new_segment = 0.25
         r_obstacole_in_FoV = 0.01
-        r_theta = 0.05
-        r_too_close = - 0.1
+        r_too_close = - 0.05
         r_collision = - 10
         r_time_limit = - 10
         r_goal = 10
@@ -372,22 +333,16 @@ class ShipQuestEnv(gym.Env):
         # Reward negativa ad ogni step
         reward += r_time_step
 
-        # Calcolo il numero di nuovi segmenti visti, se almeno un segmento è stato visto e 
-        # la normale ai segmenti visti
-        new_segments_seen, obstacle_in_FoV, theta_normal = self.segments_check()
-
-        # Calcolo la reward in base alla differenza tra l'orientamento dell'agente e la normale all'ostacolo
-        if theta_normal is not None:
-            theta_agent = self.agent.get_state()[2]
-            theta_diff = np.arctan2(np.sin(theta_agent - theta_normal), np.cos(theta_agent - theta_normal))
-            if abs(theta_diff) < np.pi/4:
-                reward += float(r_theta * (1 - abs(theta_diff)/ (np.pi/4) ))
-
+        # Calcolo il numero di nuovi segmenti visti e se almeno un segmento è stato visto
+        new_segments_seen, obstacle_in_FoV = self.segments_check()
         reward += new_segments_seen * r_new_segment + obstacle_in_FoV * r_obstacole_in_FoV
 
         # Controllo se l'agente è troppo vicino all'ostacolo
         if self.proximity_sensor:
-            if observation[13] == 1 or observation[14] == 1 or np.min(observation[3:13]) < self.frontal_safe_distance / self.lidar_params['max_range']:
+            if observation[13] < self.lateral_safe_distance / self.proximity_sensor_range or \
+               observation[14] < self.lateral_safe_distance / self.proximity_sensor_range or \
+               np.min(observation[3:13]) < self.frontal_safe_distance / self.lidar_params['max_range']:
+                
                 reward += r_too_close
         else:
             if np.min(observation[3:13]) < self.frontal_safe_distance / self.lidar_params['max_range']:
@@ -410,6 +365,7 @@ class ShipQuestEnv(gym.Env):
             terminated = True
         
         elif self.step_count >= self.max_steps:
+            # Reward aggiuntiva proporzionale al coverage del perimetro
             seen_segments = sum(1 for segment in self.segments.values() if segment.seen)
             coverage = round(seen_segments / self.n_segments, 2)
             reward += r_time_limit + coverage * r_goal
@@ -533,12 +489,15 @@ class ShipQuestEnv(gym.Env):
                 pygame.draw.line(self.surf, (255, 0, 0), agent_pixel_position, (x, y), 1)
         
         if self.draw_proximity_sensor:
-            prox_range_pixel = round(self.lateral_safe_distance * self.scale)
+            prox_range_pixel = round(self.proximity_sensor_range * self.scale)
+            prox_alert_pixel = round(self.lateral_safe_distance * self.scale)
             for i, angle in enumerate(self.proximity_sensor_heading):
                 x = agent_pixel_position[0] + round(prox_range_pixel * np.cos(self.agent.theta + angle))
                 y = agent_pixel_position[1] - round(prox_range_pixel * np.sin(self.agent.theta + angle))
+                xp = agent_pixel_position[0] + round(prox_alert_pixel * np.cos(self.agent.theta + angle))
+                yp = agent_pixel_position[1] - round(prox_alert_pixel * np.sin(self.agent.theta + angle))
                 pygame.draw.line(self.surf, (255, 0, 0), agent_pixel_position, (x, y), 1)
-                pygame.draw.circle(self.surf, (255, 0, 0), (x, y), 3)
+                pygame.draw.circle(self.surf, (255, 0, 0), (xp, yp), 3)
     
     def render(self):
         """
@@ -599,6 +558,7 @@ if __name__ == "__main__":
         'segments_lenght':                  0.25,
         'n_actions':                        3,
         'use_lateral_proximity_sensor':     True,
+        'proximity_sensor_range':           0.5,
         'lateral_proximity_sensor_heading': [np.pi/2, -np.pi/2],
         'draw_proximity_sensor':            True,
         'init_pose':                        None,
@@ -619,9 +579,8 @@ if __name__ == "__main__":
         action = env.action_space.sample()  # Esegui un'azione casuale
         observation, reward, terminated, truncated, info = env.step(action)
 
-        print(info)
+        print(observation)
         if terminated or truncated:
-            print(truncated)
             observation, info = env.reset()
     
     env.close()

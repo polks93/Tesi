@@ -14,6 +14,8 @@ class ShipQuestEnv(gym.Env):
     - Aggiunta dizionario Options come input per tutti i parametri dell'ambiente
     - Utilizzo dei dati completi del LiDAR per l'osservazione
     - Possibilità di selezionare 3 o 5 azioni
+    - Aggiunta reward finale, dopo aver raggiunto max_steps, in base al coverage del perimetro 
+
     """
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
@@ -361,7 +363,10 @@ class ShipQuestEnv(gym.Env):
             terminated = True
         
         elif self.step_count >= self.max_steps:
-            reward += r_time_limit
+            # Reward aggiuntiva proporzionale al coverage del perimetro
+            seen_segments = sum(1 for segment in self.segments.values() if segment.seen)
+            coverage = round(seen_segments / self.n_segments, 2)
+            reward += r_time_limit + coverage * r_goal
             self.status['time_limit'] = True
             terminated = True
 

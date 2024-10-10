@@ -13,7 +13,6 @@ class ShipQuestEnv(gym.Env):
      Le differenze principali rispetto alla versione precedente sono:
      - Nuova gestione delle reward:
         - L'agente riceve una reward in base all'orientamento rispetto alla superficie dell'ostacolo
-        - Aggiunta reward totale, dopo aver raggiunto max_steps, in base al coverage del perimetro 
         """
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 

@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Union, Sequence, Tuple
+from typing import Union, Sequence, Tuple, Optional
 from my_package.core.geometry import is_rect_in_max_range, find_sectors_indices
 
 def lidar(pose: Union[Sequence, np.ndarray], obstacle: Sequence, lidar_params: dict) -> np.ndarray:
@@ -155,24 +155,44 @@ def discretize_lidar(pose: np.ndarray, lidar_params: dict, obstacle: Sequence, s
 
     return occupied_sectors, collision_alert
 
-def proximity_sensor(pose: np.ndarray, heading: float, safe_distance: float, obstacle: Sequence) -> int:
+def proximity_sensor(pose: np.ndarray, heading: float, max_range: float, obstacle: Sequence, return_type: Optional[str] = 'binary') -> int | float:
     """
     Simula un sensore di prossimità binario che rileva ostacoli entro una distanza di sicurezza.
     Args:
         pose (np.ndarray): La posizione attuale del sensore come array numpy [x, y, theta].
         heading (float): L'angolo di orientamento del sensore rispetto alla posizione attuale.
-        safe_distance (float): La distanza di sicurezza entro la quale un ostacolo viene rilevato.
+        max_range (float): La distanza di sicurezza entro la quale un ostacolo viene rilevato.
         obstacle (Sequence): La rappresentazione dell'ostacolo come una sequenza di coordinate.
+        return_type (Optional[str]): Il tipo di valore restituito dal sensore di prossimità. Può essere 'binary' (default) o 'range'.
     Returns:
-        int: Ritorna 1 se un ostacolo è rilevato entro la distanza di sicurezza, altrimenti 0.
+        int | float: Un valore binario o una distanza, a seconda del tipo di valore restituito richiesto.
     """
-
+    valid_return_types = ['binary', 'range']
+    if return_type not in valid_return_types:
+        raise ValueError(f"return_type must be one of {valid_return_types}")
     theta = pose[2] + heading
     distance = ray_rectangle_intersection(pose[0], pose[1], theta, obstacle)
-    if distance is not None and distance <= safe_distance:
-        return 1
+
+
+    if distance is not None and distance <= max_range:
+
+        match(return_type):
+            case 'range':
+                return distance
+            case 'binary':
+                return 1
+            case _:
+                return 1
+            
     else:
-        return 0
+
+        match(return_type):
+            case 'range':
+                return max_range
+            case 'binary':
+                return 0
+            case _:
+                return 0
 
 if __name__ == "__main__":
     # Define the pose of the lidar sensor
