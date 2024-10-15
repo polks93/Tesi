@@ -1,6 +1,7 @@
 import numpy as np
 import warnings
 from my_package.core import lidar, discretize_lidar
+
 from typing import Tuple, Union, Sequence
 
 class Unicycle():
@@ -208,8 +209,8 @@ class Unicycle():
         pose = self.get_state()[:3]
         sectors, alert = discretize_lidar(pose, self.lidar_params, obstacle, safe_distance, sector_indices)
 
-        return sectors, alert
-    
+        return sectors, alert   
+
 if __name__ == "__main__":
 
     footprint = {'radius': 0.15}
