@@ -571,8 +571,8 @@ if __name__ == "__main__":
         'max_steps':                        2000
     }	
 
-    env = ShipQuestEnv(render_mode='human', Options=Options)
-    # env = gym.make("ShipQuest-v1", render_mode="human", Options=Options)
+    # env = ShipQuestEnv(render_mode='human', Options=Options)
+    env = gym.make("ShipQuest-v4", render_mode="human", Options=Options)
     observation, info = env.reset()
     print(observation)
 

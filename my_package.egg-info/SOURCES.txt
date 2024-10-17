@@ -24,5 +24,6 @@ my_package/envs/ship_quest_v1.py
 my_package/envs/ship_quest_v2.py
 my_package/envs/ship_quest_v3.py
 my_package/envs/ship_quest_v4.py
+my_package/envs/ship_quest_v5.py
 my_package/registration/__init__.py
 my_package/registration/register.py

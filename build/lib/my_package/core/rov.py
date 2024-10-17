@@ -17,9 +17,13 @@ class Rov:
         self.init_pose = init_pose
         self.reset()
 
-        # Definisce le velocità massime lineari e angolari
+        # Definisce le velocità massime (modello uniciclo)
         self.max_v      = 0.75
         self.max_omega  = 2.5
+
+        # Definise le velocità massime (modello di Zeno)
+        self.max_v_zeno = 1.0
+        self.max_omega_zeno = 1.0
 
         # Definisce la footprint dell'uniciclo
         if 'radius' not in footprint:
@@ -45,6 +49,46 @@ class Rov:
         self.theta = self.init_pose[2]
         self.v = 0.0
         self.omega = 0.0
+        self.vx = 0.0
+        self.vy = 0.0
+
+    def saturate(self, value: float, max_value: float) -> Tuple[float, bool]:
+        """
+        Limita il valore assoluto di un numero al massimo specificato.
+        Args:
+            value (float): Il valore da limitare.
+            max_value (float): Il valore massimo assoluto consentito.
+        Returns:
+            float: Il valore limitato
+        """
+
+        if value > max_value:
+            return max_value, True
+        elif value < - max_value:
+            return - max_value, True
+        return value, False
+    
+    def zeno_kinematics(self, dvx: float, dvy: float, domega: float, dt: float=1.0) -> list[bool]:
+        """
+        Muove il ROV usando la cinematica di Zeno.
+        Args:
+            - dvx (float): Variazione della velocità lungo l'asse x.
+            - dvy (float): Variazione della velocità lungo l'asse y.
+            - domega (float): Variazione della velocità angolare.
+            - dt (float): Intervallo di tempo per l'aggiornamento.
+        Returns:    
+            None
+        """
+        saturation = [False, False, False]
+        self.vx, saturation[0] = self.saturate(self.vx + dvx, self.max_v_zeno)
+        self.vy, saturation[1] = self.saturate(self.vy + dvy, self.max_v_zeno)
+        self.omega, saturation[2] = self.saturate(self.omega + domega, self.max_omega_zeno)
+
+        self.theta = self.wrapToPi(self.theta + self.omega * dt)
+        self.x += (self.vx * np.cos(self.theta)  - self.vy * np.sin(self.theta)) * dt
+        self.y += (self.vx * np.sin(self.theta)  + self.vy * np.cos(self.theta)) * dt
+
+        return saturation
 
     def unicycle_kinematics(self, omega: float, dt: float=1.0):
         """
@@ -78,6 +122,14 @@ class Rov:
             np.array: Un array contenente la posizione (x, y), l'orientamento (theta), la velocità lineare (v) e la velocità angolare (omega).
         """
         return np.array([self.x, self.y, self.theta, self.v, self.omega])
+    
+    def get_zeno_state(self) -> np.ndarray:
+        """
+        Restituisce lo stato attuale del ROV.
+        Returns:
+            np.array: Un array contenente la posizione (x, y), l'orientamento (theta), la velocità lineare (v) e la velocità angolare (omega).
+        """
+        return np.array([self.x, self.y, self.theta, self.vx, self.vy, self.omega])
     
     def collision_check(self, Ship: ShipObstacle) -> bool:
         """
@@ -164,13 +216,29 @@ if __name__ == '__main__':
 
     """Test wrapToPi"""
 
-    agent = Rov()
+    # agent = Rov()
 
-    for i in range(10000):
-        angle = np.random.uniform(0,1000)
-        wrapped_angle = agent.wrapToPi(angle)
-        if wrapped_angle < -np.pi or wrapped_angle >= np.pi:
-            print(f"Errore: {angle} -> {wrapped_angle}")
-            break
+    # for i in range(10000):
+    #     angle = np.random.uniform(0,1000)
+    #     wrapped_angle = agent.wrapToPi(angle)
+    #     if wrapped_angle < -np.pi or wrapped_angle >= np.pi:
+    #         print(f"Errore: {angle} -> {wrapped_angle}")
+    #         break
     
-    print("Test superato!")
+    # print("Test superato!")
+
+    """ Test saturate """
+    agent = Rov()
+    done = False
+    for i in range(10):
+        dvx = - 0.5
+        if done:
+            dvx = 0.0
+        dvy = 0.0
+        domega = 0.0
+        saturation = agent.zeno_kinematics(dvx, dvy, domega)
+        if saturation[0]:
+            done = True 
+        print(saturation)
+        print(agent.get_zeno_state()[3::])
+

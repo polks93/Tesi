@@ -50,3 +50,9 @@ register(
     entry_point='my_package.envs.ship_quest_v4:ShipQuestEnv',
     max_episode_steps=5000,
 )
+
+register(
+    id='ShipQuest-v5',
+    entry_point='my_package.envs.ship_quest_v5:ShipQuestEnv',
+    max_episode_steps=5000,
+)
