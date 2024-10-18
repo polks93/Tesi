@@ -247,8 +247,8 @@ class ShipQuestEnv(gym.Env):
         Returns:
             omega (float): Il comando di controllo per l'agente.
         """
-        v_step = 0.5
-        omega_step = 0.5
+        v_step = 0.05
+        omega_step = 0.05
 
         match (action):
             case 0:
@@ -274,7 +274,7 @@ class ShipQuestEnv(gym.Env):
             case 5:
                 dvx = 0.0
                 dvy = 0.0
-                domega = -omega_step
+                domega = - omega_step
 
             case 6:
                 dvx = 0.0
@@ -560,7 +560,7 @@ if __name__ == "__main__":
         'agent_radius':                     0.1,
         'frontal_safe_distance':            0.5,
         'lateral_safe_distance':            0.25,
-        'lidar_params':                     {'n_beams': 10, 'max_range': 1.0, 'FoV': np.pi/2},
+        'lidar_params':                     {'n_beams': 10, 'max_range': 1.5, 'FoV': np.pi/2},
         'draw_lidar':                       True,
         'max_steps':                        2000
     }	
@@ -572,7 +572,8 @@ if __name__ == "__main__":
 
     # Esegui 100 passi casuali
     for _ in range(300):
-        action = env.action_space.sample()  # Esegui un'azione casuale
+        # action = env.action_space.sample()  # Esegui un'azione casuale
+        action = 5
         observation, reward, terminated, truncated, info = env.step(action)
         print(observation)
         if terminated or truncated:
