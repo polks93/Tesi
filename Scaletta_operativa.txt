@@ -6,6 +6,7 @@
       e solo dopo mandare un altro comando 
     - Posso inviare v_surge e v_sway in modo continuo ma non ho accesso a omega direttamente
     - Posso inviare un errore relativo di yaw, ma non avrebbe senso un'azione continua
+    -->  Posso implementare un PID per passare da yaw_error a omega, come fa il controllore di Zeno
 3) Training con A2C e modello simil Zeno
 4) Sistemare modello uniciclo con Zeno
 5) Implementare next-best-view su Zeno

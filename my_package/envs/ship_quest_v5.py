@@ -5,8 +5,10 @@ import gymnasium    as gym
 from gymnasium  import spaces
 from typing     import Tuple, Dict, Any, Optional, Sequence
 
+from obstacle_simulation import ShipObstacle
+
 from my_package.core    import generate_random_obstacle, is_segment_visible
-from my_package.core    import ShipObstacle, Rov
+from my_package.core    import Rov
 from my_package.core.ship_detection import proximity_sensor
 
 class ShipQuestEnv(gym.Env):
@@ -14,7 +16,7 @@ class ShipQuestEnv(gym.Env):
     Le differenze principali rispetto alla versione precedente sono:
     - Modifica dinamica dell'agente. Aggiunte le azioni corrispondenti ai comandi di Zeno.
     - Incluse tre componenti dello stato delle osservazioni: vx, vy, omega.
-    - Rimosso il sensore di prossimità frontale.
+    - Rimossi i sensori di prossimità laterali.
     """
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
@@ -496,8 +498,7 @@ class ShipQuestEnv(gym.Env):
                 x = agent_pixel_position[0] + round(range_pixel * np.cos(self.agent.theta + angle))
                 y = agent_pixel_position[1] - round(range_pixel * np.sin(self.agent.theta + angle))
                 pygame.draw.line(self.surf, (255, 0, 0), agent_pixel_position, (x, y), 1)
-        
-    
+          
     def render(self):
         """
         Calcola i frame di rendering come specificato da render_mode durante l'inizializzazione dell'ambiente.

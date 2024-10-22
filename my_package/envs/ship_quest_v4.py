@@ -5,9 +5,12 @@ import gymnasium    as gym
 from gymnasium  import spaces
 from typing     import Tuple, Dict, Any, Optional, Sequence
 
-from my_package.core    import generate_random_obstacle, is_segment_visible
-from my_package.core    import ShipObstacle, Rov
-from my_package.core.ship_detection import proximity_sensor
+from obstacle_simulation import ShipObstacle
+from obstacle_simulation.ship.ship_detection import proximity_sensor
+
+from my_package.core    import Rov
+# from my_package.core    import ShipObstacle
+# from my_package.core.ship_detection import proximity_sensor
 
 class ShipQuestEnv(gym.Env):
     """ UPGRADED VERSION OF ShipQuestEnv-v3
@@ -233,8 +236,7 @@ class ShipQuestEnv(gym.Env):
             self.render()
 
         return observation, info
-
-    
+  
     def action_to_control(self, action: int) -> float:
         """
         Converte l'azione discreta in un comando di controllo per l'agente.
@@ -413,7 +415,6 @@ class ShipQuestEnv(gym.Env):
             self.render()
 
         return observation, reward, terminated, truncated, info
-
 
     def draw_ship(self) -> None:
         """

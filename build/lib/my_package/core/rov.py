@@ -2,8 +2,9 @@ import numpy as np
 import warnings
 from typing import Tuple, Sequence, Optional
 
-from my_package.core import ShipObstacle
-from my_package.core.ship_detection import lidar
+# from my_package.core import ShipObstacle
+# from my_package.core.ship_detection import lidar
+from obstacle_simulation import ShipObstacle, lidar
 
 class Rov:
     def __init__(

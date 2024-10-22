@@ -5,8 +5,10 @@ import gymnasium    as gym
 from gymnasium  import spaces
 from typing     import Tuple, Dict, Any, Optional, Sequence
 
+from obstacle_simulation import ShipObstacle
+
 from my_package.core    import generate_random_obstacle, is_segment_visible
-from my_package.core    import ShipObstacle, Rov
+from my_package.core    import Rov
 from my_package.core.ship_detection import proximity_sensor
 
 class ShipQuestEnv(gym.Env):
@@ -572,8 +574,7 @@ if __name__ == "__main__":
 
     # Esegui 100 passi casuali
     for _ in range(300):
-        # action = env.action_space.sample()  # Esegui un'azione casuale
-        action = 5
+        action = env.action_space.sample()  # Esegui un'azione casuale
         observation, reward, terminated, truncated, info = env.step(action)
         print(observation)
         if terminated or truncated:
