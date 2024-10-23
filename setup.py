@@ -4,7 +4,7 @@ setup(
     name='my_package',
     version='0.1',
     packages=find_packages(),
-    install_requires=['gymnasium', 'numpy', 'pygame', 'obstacle_simulation'],
+    install_requires=['gymnasium', 'numpy', 'pygame', 'obstacle-simulation'],
     description='Some custom environment for the gymnasium library',
     classifiers=[
         'Programming Language :: Python :: 3',
