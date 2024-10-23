@@ -56,3 +56,9 @@ register(
     entry_point='my_package.envs.ship_quest_v5:ShipQuestEnv',
     max_episode_steps=5000,
 )
+
+register(
+    id='ShipQuestContinuous-v0',
+    entry_point='my_package.envs.ship_quest_continuous_v0:ShipQuestContinuousEnv',
+    max_episode_steps=5000,
+)

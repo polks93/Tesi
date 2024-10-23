@@ -23,9 +23,10 @@ class Rov:
         self.max_omega  = 2.5
 
         # Definise le velocità massime (modello di Zeno)
-        self.max_v_zeno = 0.2
-        self.max_omega_zeno = 0.15
-
+        # self.max_v_zeno = 0.2
+        # self.max_omega_zeno = 0.15
+        self.max_v_zeno = 1.0
+        self.max_omega_zeno = 1.0
         # Definisce la footprint dell'uniciclo
         if 'radius' not in footprint:
             warnings.warn("footprint non definita correttamente. Imposto la footprint circolare con raggio 0.5.")

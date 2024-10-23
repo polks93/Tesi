@@ -282,7 +282,7 @@ if __name__ == '__main__':
     """ Test delle classi Actor e Critic """
     import numpy as np
     state_dim = 2
-    action_dim = 2
+    action_dim = 1
     hidden_dim = 32
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -298,7 +298,7 @@ if __name__ == '__main__':
 
     # print(f'Actions: {actions_pred}')
     # print(f'Q values: {q_values}')
-    low = np.array([-2.0, -3.0])
+    low = np.array([-1.0])
     agent = A2C_agent(state_dim, action_dim, hidden_dim, device, action_low=low)
     state = np.random.rand(state_dim)
     action = agent.select_action(state, 0.1)
@@ -306,7 +306,7 @@ if __name__ == '__main__':
     # print(f'Action: {action}')
 
     memory = ReplayBuffer(1000)
-    for i in range(100):
+    for i in range(1000):
         state = np.random.rand(state_dim)
         action = np.random.rand(action_dim)
         reward = random.random()
@@ -316,11 +316,11 @@ if __name__ == '__main__':
 
     agent.update(memory, batch_size)
     selected_actions = []
-    for i in range(100):
+    for i in range(10000):
         state = np.random.rand(state_dim)
-        action = agent.select_action(state, 5.0)
-        print(action)
-        selected_actions.append(action[1])
+        action = agent.select_action(state, 0.0)
+        # print(action)
+        selected_actions.append(action)
     print('Update completed')
 
     import matplotlib.pyplot as plt

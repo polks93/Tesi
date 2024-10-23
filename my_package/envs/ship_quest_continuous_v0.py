@@ -3,22 +3,18 @@ import numpy        as np
 import gymnasium    as gym
 
 from gymnasium  import spaces
-from typing     import Tuple, Dict, Any, Optional
+from typing     import Tuple, Dict, Any, Optional, Union
 
 from obstacle_simulation import ShipObstacle
 
-from my_package.core    import Rov
+from my_package.core.zeno    import Zeno
 
-class ShipQuestEnv(gym.Env):
-    """ UPGRADED VERSION OF ShipQuestEnv-v4
+class ShipQuestContinuousEnv(gym.Env):
+    """Continuous version OF ShipQuestEnv-v5
     Le differenze principali rispetto alla versione precedente sono:
-    - Modifica dinamica dell'agente. Aggiunte le azioni corrispondenti ai comandi di Zeno.
-    - I limiti di velocita non corrispondono a quelli di Zeno. 
-    - Il controllo e` ancora puramente cinematico.
-    - Incluse tre componenti dello stato delle osservazioni: vx, vy, omega.
-    - Rimossi i sensori di prossimità laterali.
+
     """
-    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30, "models": ["unicycle", "AUV"]}
 
     def __init__(
             self,
@@ -45,17 +41,6 @@ class ShipQuestEnv(gym.Env):
             self.max_y = workspace[3]
             self.ws_center = ((self.max_x - self.min_x) / 2, (self.max_y - self.min_y) / 2)
 
-            # Definisco gli spazi delle azioni
-            self.n_actions = Options['n_actions']
-            self.action_space = spaces.Discrete(self.n_actions)
-
-            # Definisco lo spazio delle osservazioni
-
-            self.num_observation = 6 + Options['lidar_params']['n_beams']
-            low = np.zeros(self.num_observation).astype(np.float64)
-            high = np.ones(self.num_observation).astype(np.float64)
-            self.observation_space = spaces.Box(low=low, high=high, shape=(self.num_observation,), dtype=np.float64)
-
             # Inizializzo agente
             if Options['init_pose'] is None:
                 self.init_pose = self.get_random_init_pose()
@@ -65,9 +50,17 @@ class ShipQuestEnv(gym.Env):
                 self.random_init_pose = False
 
             # Parametri agente
-            self.dt = 1.0 / self.metadata["render_fps"]
+            if Options['agent_model'] not in self.metadata['models']:
+                raise ValueError(f"Modello non valido. I modelli supportati sono: {self.metadata['models']}")
+            
+            self.agent_model            = Options['agent_model']
+            self.dt                     = 1.0 / self.metadata["render_fps"]
+            self.frame_per_step         = Options['frame_per_step']
             self.agent_radius           = Options['agent_radius']
             self.frontal_safe_distance  = Options['frontal_safe_distance']
+
+            if self.agent_model == "unicycle":
+                self.v_surge = Options['v_surge']
 
             # Parametri del LiDAR
             self.lidar_params   = Options['lidar_params']
@@ -75,7 +68,27 @@ class ShipQuestEnv(gym.Env):
             self.lidar_angles = np.linspace(- self.lidar_params['FoV'] / 2, self.lidar_params['FoV'] / 2, self.lidar_params['n_beams'])
 
             # Creo un agente del tipo Unicylce
-            self.agent = Rov(init_pose=self.init_pose, footprint={'radius': self.agent_radius}, lidar_parms=self.lidar_params)
+            self.agent = Zeno(init_pose=self.init_pose, footprint={'radius': self.agent_radius}, lidar_parms=self.lidar_params)
+            
+            # Definisco il nuemero di azioni disponibili e dimensioni dello stato
+            if self.agent_model == "unicycle":
+                self.n_actions = 1
+                self.state_dim = 4
+            elif self.agent_model == "AUV":
+                self.n_actions = 3
+                self.state_dim = 6
+            else:
+                raise ValueError(f"Modello non valido. I modelli supportati sono: {self.metadata['models']}")
+            
+            self.action_low = - np.ones(self.n_actions)
+            self.action_high = np.ones(self.n_actions)
+            self.action_space = spaces.Box(low=self.action_low, high=self.action_high, shape=(self.n_actions,), dtype=np.float64)
+
+            # Definisco lo spazio delle osservazioni
+            self.num_observation = self.state_dim + Options['lidar_params']['n_beams']
+            low = np.zeros(self.num_observation).astype(np.float64)
+            high = np.ones(self.num_observation).astype(np.float64)
+            self.observation_space = spaces.Box(low=low, high=high, shape=(self.num_observation,), dtype=np.float64)
 
             # Creo un ostacolo del tipo ShipObstacle
             self.Ship = ShipObstacle(self.ws_center, inflation_radius=self.agent_radius)
@@ -130,7 +143,7 @@ class ShipQuestEnv(gym.Env):
         theta = theta + d_theta
 
         return np.array([x, y, theta])
-
+    
     def get_obs(self) -> tuple[np.ndarray, set[int]]:
         """
         Restituisce l'osservazione corrente dell'ambiente.
@@ -140,38 +153,46 @@ class ShipQuestEnv(gym.Env):
             - x:                    coordinata x dell'agente
             - y:                    coordinata y dell'agente
             - theta:                orientamento dell'agente
+            - v_surge:              velocità di avanzamento dell'agente (solo per modello AUV)
+            - v_sway:               velocità laterale dell'agente (solo per modello AUV)
+            - omega:                velocità angolare dell'agente
             - ranges(n_beams):      distanza misurata dal LiDAR per ogni raggio
-
-            - proximity_left:       allerta prossimità sinistra
-            - proximity_right:      allerta prossimità destra
         """
         # Init vettore di osservazione
         observation = np.zeros(self.num_observation).astype(np.float64)
 
         # Salvo le prime 3 componenti dello stato dell'agente e le normalizzo
-        state = self.agent.get_zeno_state()
+        state = self.agent.get_state()
         norm_x =        ( state[0] - self.min_x) / (self.max_x - self.min_x)
         norm_y =        ( state[1] - self.min_y) / (self.max_y - self.min_y)
         norm_theta =    ( state[2] + np.pi) / (2*np.pi)
-        norm_vx =       ( 1 + state[3] / self.agent.max_v_zeno ) / 2
-        norm_vy =       ( 1 + state[4] / self.agent.max_v_zeno ) / 2
-        norm_omega =    ( 1 + state[5] / self.agent.max_omega_zeno ) / 2
 
+        if self.agent_model == "AUV":
+            norm_surge =    ( 1 + state[3] / self.agent.max_v ) / 2
+            norm_sway =     ( 1 + state[4] / self.agent.max_v ) / 2
+
+        norm_omega =    ( 1 + state[5] / self.agent.max_omega ) / 2
 
 
         # Ottengo i dati del lidar e li normalizzo
         ranges, seen_segments_id = self.agent.lidar(self.Ship)
         norm_ranges = ranges / self.lidar_params['max_range']
 
-
         # Aggiorno vettore di osservazione
+        
         observation[0]      = norm_x                    # Coordinata x
         observation[1]      = norm_y                    # Coordinata y
         observation[2]      = norm_theta                # Orientamento
-        observation[3]      = norm_vx                   # Velocità lineare x
-        observation[4]      = norm_vy                   # Velocità lineare y
-        observation[5]      = norm_omega                # Velocità angolare
-        observation[6:16]   = norm_ranges               # Dati LiDAR
+
+        if self.agent_model == "unicycle":
+            observation[3]      = norm_omega                # Velocità angolare
+            observation[4:]     = norm_ranges               # Dati LiDAR
+
+        else:
+            observation[3]      = norm_surge                # Velocità di avanzamento
+            observation[4]      = norm_sway                 # Velocità laterale
+            observation[5]      = norm_omega                # Velocità angolare
+            observation[6:]     = norm_ranges               # Dati LiDAR
 
         return observation, seen_segments_id
     
@@ -188,7 +209,7 @@ class ShipQuestEnv(gym.Env):
 
         info = self.status | {'coverage' : coverage}
         
-        return info
+        return info   
     
     def reset(self, *, seed: int | None = None, options: Dict[str, Any] | None = None)-> Tuple[np.ndarray, Dict[str, Any]]:
         
@@ -218,12 +239,18 @@ class ShipQuestEnv(gym.Env):
         self.segments = self.Ship.copy_segments()
         self.n_segments = len(self.segments)
 
-        # Reimposto l'agente su una posizione casuale  
-        if self.random_init_pose:
-            init_pose = self.get_random_init_pose()
-        else:
-            init_pose = self.init_pose
-        self.agent.reset(init_pose=init_pose)
+        # Reimposto l'agente su una posizione casuale
+        done = False
+        while not done:  
+            if self.random_init_pose:
+                init_pose = self.get_random_init_pose()
+            else:
+                init_pose = self.init_pose
+            self.agent.reset(init_pose=init_pose)
+            _, seen_segments = self.agent.lidar(self.Ship)
+
+            if len(seen_segments) == 0:
+                done = True
 
         self.status = {'goal': False, 'collision': False, 'out_of_bounds': False, 'time_limit': False}   
 
@@ -236,57 +263,33 @@ class ShipQuestEnv(gym.Env):
         if self.render_mode == "human":
             self.render()
 
-        return observation, info
-
+        return observation, info   
     
-    def action_to_control(self, action: int) -> tuple:
+    def action_to_controls(self, action: np.ndarray) -> list:
         """
-        Converte l'azione discreta in un comando di controllo per l'agente.
-
+        Converte l'azione scelta dall'agente nei controlli necessari per l'agente.
+        L'azione relativa allo yaw è un valore tra -1 e 1 che viene prima convertito in -pi e pi. 
+        In questo modo il valore corrisponde all'angolo assoluto desiderato, quindi
+        viene sommato all'orientamento attuale dell'agente per ottenere l'orientamento relativo.
         Args:
-            action (int): L'azione discreta scelta dall'agente.
-
+            action (np.ndarray): L'azione scelta dall'agente.
         Returns:
-            omega (float): Il comando di controllo per l'agente.
+            list: Una lista contenente i controlli necessari per l'agente.
         """
-        v_step = 0.5
-        omega_step = 0.5
-
-        match (action):
-            case 0:
-                dvx = v_step
-                dvy = 0.0
-                domega = 0.0
-            case 1:
-                dvx = -v_step
-                dvy = 0.0
-                domega = 0.0
-            case 2:
-                dvx = 0.0
-                dvy = v_step
-                domega = 0.0
-            case 3:
-                dvx = 0.0
-                dvy = -v_step
-                domega = 0.0
-            case 4:
-                dvx = 0.0
-                dvy = 0.0
-                domega = omega_step
-            case 5:
-                dvx = 0.0
-                dvy = 0.0
-                domega = - omega_step
-
-            case 6:
-                dvx = 0.0
-                dvy = 0.0
-                domega = 0.0
-            case _:
-                raise ValueError(f"Invalid action: {action}")
-            
-        return dvx, dvy, domega
-    
+        if self.agent_model == 'unicycle':
+            # Yaw assoluto desiderato tra -pi e pi
+            yaw_des = action[0] * np.pi/4
+            # # Yaw attuale dell'agente
+            # yaw     = self.agent.get_state()[2]
+            # # Yaw relativo (limitato tra -pi/4 e pi/4)
+            # yaw_rel = np.clip(yaw_des + yaw, - np.pi/4, np.pi/4)
+            return [self.v_surge, 0.0, float(yaw_des)]
+        else: # AUV
+            surge = action[0] * self.agent.max_v
+            sway = action[1] * self.agent.max_v
+            yaw_des = action[2] * np.pi/4
+            return [surge, sway, float(yaw_des)]
+        
     def segments_check(self, seen_segments_id) -> Tuple[int, bool]:
         """
         Verifica i segmenti visti e aggiorna il loro stato.
@@ -311,7 +314,7 @@ class ShipQuestEnv(gym.Env):
                 new_segnments += 1
 
         return new_segnments, any_segment_seen
-
+    
     def goal_check(self) -> bool:
         """
         Verifica se l'agente ha visto tutti i segmenti.
@@ -320,8 +323,8 @@ class ShipQuestEnv(gym.Env):
             bool: True se l'agente ha visto tutti i segmenti, False altrimenti.
         """
         return all([segment.seen for segment in self.segments.values()])
-        
-    def get_reward(self, observation: np.ndarray, seen_segments_id: set[int], saturation: list) -> Tuple[float, bool]:
+    
+    def get_reward(self, observation: np.ndarray, seen_segments_id: set[int]) -> Tuple[float, bool]:
         """
         Calcola il reward per l'agente basato sull'osservazione corrente e verifica se l'episodio è terminato.
         Args:
@@ -339,19 +342,14 @@ class ShipQuestEnv(gym.Env):
         r_new_segment = 0.25
         r_obstacole_in_FoV = 0.01
         r_too_close = - 0.05
-        r_bad_action = - 0.0
-        r_collision = - 10
+        r_collision = - 25
+        r_out_of_bounds = - 25
         r_time_limit = - 10
-        r_goal = 10
+        r_goal = 25
 
         # Reward negativa ad ogni step
         reward += r_time_step
 
-        # Reward negativa se l'agente cerca di andare oltre i limiti massimi di velocità
-        reward += sum(saturation) * r_bad_action
-        if sum(saturation) > 1:
-            print(f"Saturation: {saturation}")
-            print(" Error: saturation > 1")
         # Calcolo il numero di nuovi segmenti visti e se almeno un segmento è stato visto
         new_segments_seen, obstacle_in_FoV = self.segments_check(seen_segments_id)
         reward += new_segments_seen * r_new_segment + obstacle_in_FoV * r_obstacole_in_FoV
@@ -359,7 +357,8 @@ class ShipQuestEnv(gym.Env):
         # Controllo se l'agente è troppo vicino all'ostacolo
         if np.min(observation[3:13]) < self.frontal_safe_distance / self.lidar_params['max_range']:
             reward += r_too_close
-
+        
+        """ Qui posso usare il metodo zeno.collision_check """
         # Check eventi che terminano l'episodio
         if self.Ship.point_in_ship(self.agent.get_state()[:2]):
             reward += r_collision
@@ -367,7 +366,7 @@ class ShipQuestEnv(gym.Env):
             terminated = True
 
         elif not self.agent.boundary_check(self.workspace):
-            reward += r_collision
+            reward += r_out_of_bounds
             self.status['collision'] = True
             terminated = True
 
@@ -384,9 +383,9 @@ class ShipQuestEnv(gym.Env):
             self.status['time_limit'] = True
             terminated = True
 
-        return reward, terminated
+        return reward, terminated    
     
-    def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+    def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         """
         Esegue un passo nell'ambiente in base all'azione fornita.
 
@@ -395,7 +394,7 @@ class ShipQuestEnv(gym.Env):
         Se la modalità di rendering è impostata su 'human', viene renderizzato un frame.
 
         Args:
-            action (int): L'azione scelta dall'agente.
+            action np.float64: L'azione scelta dall'agente.
 
         Returns:
             observation (np.array): La nuova osservazione dell'ambiente.
@@ -405,17 +404,24 @@ class ShipQuestEnv(gym.Env):
             info (dict): Informazioni aggiuntive sull'ambiente.
         """
         self.step_count += 1
+        controls = self.action_to_controls(action)
 
-        dvx, dvy, domega = self.action_to_control(action)
-        
-        # Eseguo l'azione 
-        saturation = self.agent.zeno_kinematics(dvx=dvx, dvy=dvy, domega=domega, dt=self.dt)
-        
-        # Calcolo la nuova osservazione
-        observation, seen_segments_id = self.get_obs()
+        new_segments_id = set()
 
+        for _ in range(self.frame_per_step):
+            # Eseguo l'azione 
+            self.agent.controller(v_surge_des=controls[0], v_sway_des=controls[1], yaw_rel=controls[2], dt=self.dt)
+            self.agent.kinematics(self.dt)
+            
+            # Calcolo la nuova osservazione
+            observation, step_seen_segments_id = self.get_obs()
+
+            # Aggiungo i nuovi segmenti
+            for id in step_seen_segments_id:
+                new_segments_id.add(id)
+            
         # Calcolo le reward e verifico se l'episodio è terminato
-        reward, terminated = self.get_reward(observation, seen_segments_id, saturation)
+        reward, terminated = self.get_reward(observation, new_segments_id)
 
         truncated = False
         info = self.get_info()
@@ -423,8 +429,7 @@ class ShipQuestEnv(gym.Env):
         if self.render_mode == "human":
             self.render()
 
-        return observation, reward, terminated, truncated, info
-
+        return observation, reward, terminated, truncated, info   
 
     def draw_ship(self) -> None:
         """
@@ -454,7 +459,7 @@ class ShipQuestEnv(gym.Env):
                 pygame.draw.line(self.surf, (0, 255, 0), (x1, y1), (x2, y2), 4)
             else:
                 pygame.draw.line(self.surf, (255, 0, 0), (x1, y1), (x2, y2), 4)
-            
+
     def draw_agent(self) -> None:
         """
         Disegna l'agente e il suo campo visivo sulla superficie di rendering.
@@ -499,7 +504,7 @@ class ShipQuestEnv(gym.Env):
                 x = agent_pixel_position[0] + round(range_pixel * np.cos(self.agent.theta + angle))
                 y = agent_pixel_position[1] - round(range_pixel * np.sin(self.agent.theta + angle))
                 pygame.draw.line(self.surf, (255, 0, 0), agent_pixel_position, (x, y), 1)
-          
+
     def render(self):
         """
         Calcola i frame di rendering come specificato da render_mode durante l'inizializzazione dell'ambiente.
@@ -550,32 +555,37 @@ class ShipQuestEnv(gym.Env):
             pygame.quit()
 
 
-
 if __name__ == "__main__":
     Options = {
         'generate_random_ship':             True,
         'ship_perimeter':                   12,
         'workspace_safe_distance':          2,
         'segments_lenght':                  0.25,
-        'n_actions':                        5,
+        'frame_per_step':                   10,
         'init_pose':                        None,
+        'agent_model':                      "unicycle",
         'agent_radius':                     0.1,
+        'v_surge':                          0.05,
         'frontal_safe_distance':            0.5,
-        'lateral_safe_distance':            0.25,
-        'lidar_params':                     {'n_beams': 10, 'max_range': 1.5, 'FoV': np.pi/2},
+        'lidar_params':                     {'n_beams': 10, 'max_range': 2.0, 'FoV': np.pi/2},
         'draw_lidar':                       True,
         'max_steps':                        2000
     }	
 
-    env = ShipQuestEnv(render_mode='human', Options=Options)
-    # env = gym.make("ShipQuest-v5", render_mode="human", Options=Options)
+    env = ShipQuestContinuousEnv(render_mode='human', Options=Options)
+    # env = gym.make("ShipQuestContinuous-v0", render_mode="human", Options=Options)
+    low = env.action_low
+    high = env.action_high
+    print(f"Action space: {low} {high}")
+
     observation, info = env.reset()
     print(observation)
-
     # Esegui 100 passi casuali
     for _ in range(300):
         action = env.action_space.sample()  # Esegui un'azione casuale
+        # action = np.array([0.5])
         observation, reward, terminated, truncated, info = env.step(action)
+        print(action)
         print(observation)
         if terminated or truncated:
             observation, info = env.reset()
