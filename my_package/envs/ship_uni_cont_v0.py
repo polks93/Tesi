@@ -9,10 +9,16 @@ from obstacle_simulation import ShipObstacle
 
 from my_package.core.zeno    import Zeno
 
-class ShipQuestContinuousEnv(gym.Env):
+class ShipUniContEnv(gym.Env):
     """Continuous version OF ShipQuestEnv-v5
     Le differenze principali rispetto alla versione precedente sono:
+    - L'agente è un modello unicycle invece di un modello AUV.
+    - Ci sono due modalità di controllo selezionabili:
+        1) N ACTION = 1: v_surge = costante e yaw_rel [-pi/4, pi/4].
+        2) N ACTION = 2: v_surge [0,max_v_surge] e yaw_rel [-pi/4, pi/4]
 
+    - Introdotte reward negative per collisione e out of bounds proporzionali al numero di step rimanenti
+    per evitare che l'agente si fermi troppo presto.
     """
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
@@ -54,8 +60,8 @@ class ShipQuestContinuousEnv(gym.Env):
             self.frame_per_step         = Options['frame_per_step']
             self.agent_radius           = Options['agent_radius']
             self.frontal_safe_distance  = Options['frontal_safe_distance']
-            self.v_surge                = Options['v_surge']
-
+            self.v_surge_max            = Options['v_surge_max']
+            
             # Parametri del LiDAR
             self.lidar_params   = Options['lidar_params']
             self.draw_lidar     = Options['draw_lidar']
@@ -65,7 +71,7 @@ class ShipQuestContinuousEnv(gym.Env):
             self.agent = Zeno(init_pose=self.init_pose, footprint={'radius': self.agent_radius}, lidar_parms=self.lidar_params)
             
             # Definisco il nuemero di azioni disponibili e dimensioni dello stato
-            self.n_actions = 1
+            self.n_actions = Options['n_actions']
             self.state_dim = 4
 
             # Definisco lo spazio delle azioni
@@ -80,7 +86,8 @@ class ShipQuestContinuousEnv(gym.Env):
             self.observation_space = spaces.Box(low=low, high=high, shape=(self.num_observation,), dtype=np.float64)
 
             # Creo un ostacolo del tipo ShipObstacle
-            self.Ship = ShipObstacle(self.ws_center, inflation_radius=self.agent_radius)
+            ship_scale_factor = Options['ship_scale_factor']
+            self.Ship = ShipObstacle(self.ws_center, inflation_radius=self.agent_radius, scale=ship_scale_factor)
 
             # Import dati ostacolo
             self.random_ship        	    = Options['generate_random_ship']
@@ -253,9 +260,18 @@ class ShipQuestContinuousEnv(gym.Env):
         Returns:
             list: Una lista contenente i controlli necessari per l'agente.
         """
-        yaw_des = action[0] * np.pi/4
 
-        return [self.v_surge, 0.0, float(yaw_des)]
+        # yaw_des tra -pi/4 e pi/4
+        yaw_des = action[0] * np.pi/4
+        
+        if self.n_actions == 1:
+            v_surge = self.v_surge_max
+
+        elif self.n_actions == 2:
+            # v_surge tra 0 e v_surge_max
+            v_surge = (action[1] + 1) / 2 * self.v_surge_max
+
+        return [v_surge, 0.0, float(yaw_des)]
 
         
     def segments_check(self, seen_segments_id) -> Tuple[int, bool]:
@@ -332,14 +348,13 @@ class ShipQuestContinuousEnv(gym.Env):
         if self.Ship.point_in_ship(self.agent.get_state()[:2]):
             remaining_steps = self.max_steps - self.step_count
             reward += r_collision + r_early_stopping * remaining_steps
-            self.status['out_of_bounds'] = True
+            self.status['collision'] = True
             terminated = True
 
         elif not self.agent.boundary_check(self.workspace):
             remaining_steps = self.max_steps - self.step_count
-            reward += r_collision + r_early_stopping * remaining_steps
-            reward += r_out_of_bounds
-            self.status['collision'] = True
+            reward += r_out_of_bounds + r_early_stopping * remaining_steps
+            self.status['out_of_bounds'] = True
             terminated = True
 
         elif self.goal_check():
@@ -532,18 +547,20 @@ if __name__ == "__main__":
         'generate_random_ship':             True,
         'ship_perimeter':                   12,
         'workspace_safe_distance':          2,
+        'ship_scale_factor':                2.5,
         'segments_lenght':                  0.25,
         'frame_per_step':                   10,
         'init_pose':                        None,
-        'agent_radius':                     0.1,
-        'v_surge':                          0.05,
+        'agent_radius':                     0.5,
+        'v_surge_max':                      0.1,
+        'n_actions':                        1,
         'frontal_safe_distance':            0.5,
-        'lidar_params':                     {'n_beams': 10, 'max_range': 2.0, 'FoV': np.pi/2},
+        'lidar_params':                     {'n_beams': 10, 'max_range': 5.0, 'FoV': np.pi/2},
         'draw_lidar':                       True,
         'max_steps':                        2000
     }	
 
-    env = ShipQuestContinuousEnv(render_mode='human', Options=Options)
+    env = ShipUniContEnv(render_mode='human', Options=Options, workspace=(0,0,20,20))
     # env = gym.make("ShipQuestContinuous-v0", render_mode="human", Options=Options)
     low = env.action_low
     high = env.action_high
@@ -554,10 +571,11 @@ if __name__ == "__main__":
     # Esegui 100 passi casuali
     for _ in range(300):
         action = env.action_space.sample()  # Esegui un'azione casuale
-        # action = np.array([0.5])
         observation, reward, terminated, truncated, info = env.step(action)
-        print(action)
-        print(observation)
+        v_surge = env.agent.get_state()[3]
+        print(v_surge)
+        # print(action)
+        # print(observation)
         if terminated or truncated:
             observation, info = env.reset()
 

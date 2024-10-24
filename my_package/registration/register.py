@@ -62,3 +62,9 @@ register(
     entry_point='my_package.envs.ship_quest_continuous_v0:ShipQuestContinuousEnv',
     max_episode_steps=5000,
 )
+
+register(
+    id='ShipUniCont-v0',
+    entry_point='my_package.envs.ship_uni_cont_v0:ShipUniContEnv',
+    max_episode_steps=5000,
+)
