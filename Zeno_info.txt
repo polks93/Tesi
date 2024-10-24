@@ -1,0 +1,6 @@
+Radius 0.50 metri
+Piscina olimpionica 50 x 25 metri
+Sonar max range 3~5 metri
+max surge 0.25 m/s
+max sway 0.25 m/s
+max omega 10 deg/s
