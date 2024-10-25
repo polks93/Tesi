@@ -76,13 +76,13 @@ class ShipUniContEnv(gym.Env):
 
             # Definisco lo spazio delle azioni
             self.action_low     = - np.ones(self.n_actions)
-            self.action_high    = np.ones(self.n_actions)
+            self.action_high    =   np.ones(self.n_actions)
             self.action_space   = spaces.Box(low=self.action_low, high=self.action_high, shape=(self.n_actions,), dtype=np.float64)
 
             # Definisco lo spazio delle osservazioni
             self.num_observation = self.state_dim + Options['lidar_params']['n_beams']
-            low = np.zeros(self.num_observation).astype(np.float64)
-            high = np.ones(self.num_observation).astype(np.float64)
+            low     = np.zeros(self.num_observation).astype(np.float64)
+            high    = np.ones(self.num_observation).astype(np.float64)
             self.observation_space = spaces.Box(low=low, high=high, shape=(self.num_observation,), dtype=np.float64)
 
             # Creo un ostacolo del tipo ShipObstacle
@@ -271,7 +271,7 @@ class ShipUniContEnv(gym.Env):
             # v_surge tra 0 e v_surge_max
             v_surge = (action[1] + 1) / 2 * self.v_surge_max
 
-        return [v_surge, 0.0, float(yaw_des)]
+        return [float(v_surge), 0.0, float(yaw_des)]
 
         
     def segments_check(self, seen_segments_id) -> Tuple[int, bool]:
@@ -553,7 +553,7 @@ if __name__ == "__main__":
         'init_pose':                        None,
         'agent_radius':                     0.5,
         'v_surge_max':                      0.1,
-        'n_actions':                        1,
+        'n_actions':                        2,
         'frontal_safe_distance':            0.5,
         'lidar_params':                     {'n_beams': 10, 'max_range': 5.0, 'FoV': np.pi/2},
         'draw_lidar':                       True,
@@ -569,8 +569,9 @@ if __name__ == "__main__":
     observation, info = env.reset()
     print(observation)
     # Esegui 100 passi casuali
-    for _ in range(300):
+    for _ in range(1000):
         action = env.action_space.sample()  # Esegui un'azione casuale
+        action[0] = 0.0
         observation, reward, terminated, truncated, info = env.step(action)
         v_surge = env.agent.get_state()[3]
         print(v_surge)
