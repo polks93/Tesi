@@ -58,19 +58,31 @@ class ReplayBuffer:
         return len(self.buffer)
  
 class Actor(nn.Module):
-    def __init__(self, state_dim: int, action_dim: int, hidden_dim: int, device : torch.device) -> None:
+    def __init__(self, state_dim: int, action_dim: int, hidden_dim: int) -> None:
         super(Actor, self).__init__()
 
-        self.device = device
-        layers = [
-            nn.Linear(state_dim, hidden_dim),       # Layer 1 lineare
-            nn.ReLU(),                              # Layer 2 Relu per introdurre non linearità
-            nn.Linear(hidden_dim, hidden_dim),      # Layer 3 lineare
-            nn.ReLU(),                              # Layer 4 Relu per introdurre non linearità
-            nn.Linear(hidden_dim, action_dim)       # Layer 5 lineare
-        ]
-        self.model = nn.Sequential(*layers).to(self.device)
+        self.fc1 = nn.Linear(state_dim, hidden_dim)
+        self.b1 = nn.BatchNorm1d(hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc3 = nn.Linear(hidden_dim, action_dim)
 
+        self.init_weights()
+
+    def init_weights(self):
+
+        # Init di kaiming per strati con ReLU
+        nn.init.kaiming_uniform_(self.fc1.weight, nonlinearity='relu')
+        nn.init.kaiming_uniform_(self.fc2.weight, nonlinearity='relu')
+
+        # Init di Xavier per l'ultimo strato con tanh
+        nn.init.xavier_uniform_(self.fc3.weight)
+
+        # Init dei bias a zero
+        nn.init.zeros_(self.fc1.bias)
+        nn.init.zeros_(self.fc2.bias)
+        nn.init.zeros_(self.fc3.bias)
+
+            
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Calcola l'azione attraverso il modello. Questa funazione viene eseguita automaticamente quando si chiama il modello.
@@ -79,26 +91,38 @@ class Actor(nn.Module):
         Returns:
             torch.Tensor: L'azione dettata dalla policy.
         """
+        x = F.relu(self.b1(self.fc1(x)))
+        x = F.relu(self.fc2(x))
 
-        # Calcolo action attraverso il modello
-        action = torch.tanh(self.model(x))
+        action = torch.tanh(self.fc3(x))
+        
         return action
 
 class Critic(nn.Module):
 
-    def __init__(self, state_dim: int, action_dim: int, hidden_dim: int, device : torch.device) -> None:
+    def __init__(self, state_dim: int, action_dim: int, hidden_dim: int) -> None:
         super(Critic, self).__init__()
 
-        self.device = device
-        layers = [
-            nn.Linear(state_dim + action_dim, hidden_dim),  # Layer 1 lineare
-            nn.ReLU(),                                      # Layer 2 Relu per introdurre non linearità
-            nn.Linear(hidden_dim, hidden_dim),              # Layer 3 lineare
-            nn.ReLU(),                                      # Layer 4 Relu per introdurre non linearità
-            nn.Linear(hidden_dim, 1)                        # Layer 5 lineare
-        ]
-        self.model = nn.Sequential(*layers).to(self.device)
+        self.fc1 = nn.Linear(state_dim, hidden_dim)
+        self.b1 = nn.BatchNorm1d(hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim + action_dim, hidden_dim)
+        self.fc3 = nn.Linear(hidden_dim, 1)
 
+        self.init_weights()
+
+    def init_weights(self):
+        # Init di kaiming per strati con ReLU
+        nn.init.kaiming_uniform_(self.fc1.weight, nonlinearity='relu')
+        nn.init.kaiming_uniform_(self.fc2.weight, nonlinearity='relu')
+
+        # Init di Xavier per l'ultimo strato con tanh
+        nn.init.xavier_uniform_(self.fc3.weight)
+
+        # Init dei bias a zero
+        nn.init.zeros_(self.fc1.bias)
+        nn.init.zeros_(self.fc2.bias)
+        nn.init.zeros_(self.fc3.bias)
+        
     def forward(self, state: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
         """
         Calcola il valore Q attraverso il modello. Questa funzione viene eseguita automaticamente quando si chiama il modello.
@@ -108,14 +132,14 @@ class Critic(nn.Module):
         Returns:
             torch.Tensor: Il valore Q.
         """
-        # Concatena lo stato e l'azione
-        x = torch.cat([state, action], dim=1)
 
-        # Calcolo Q attraverso il modello
-        q_value = self.model(x)
+        x = F.relu(self.b1(self.fc1(state)))
+        x = F.relu(self.fc2(torch.cat((x, action), dim=1)))
+        q_value = self.fc3(x)
+
         return q_value
 
-class A2C_agent:
+class AC_agent:
     def __init__(
         self,
         state_dim: int,
@@ -155,12 +179,12 @@ class A2C_agent:
         self.action_high = torch.tensor(action_high, dtype=torch.float32, device=device)
 
         # Inizializza le reti Actor e Critic
-        self.actor = Actor(state_dim, action_dim, hidden_dim, self.device)
-        self.critic = Critic(state_dim, action_dim, hidden_dim, self.device)
+        self.actor = Actor(state_dim, action_dim, hidden_dim).to(self.device)
+        self.critic = Critic(state_dim, action_dim, hidden_dim).to(self.device)
 
         # Inizializza le target networks
-        self.target_actor = Actor(state_dim, action_dim, hidden_dim, self.device)
-        self.target_critic = Critic(state_dim, action_dim, hidden_dim, self.device)
+        self.target_actor = Actor(state_dim, action_dim, hidden_dim).to(self.device)
+        self.target_critic = Critic(state_dim, action_dim, hidden_dim).to(self.device)
         # Copia i pesi delle reti iniziali nelle target networks
         self.target_actor.load_state_dict(self.actor.state_dict())
         self.target_critic.load_state_dict(self.critic.state_dict())
@@ -284,53 +308,42 @@ if __name__ == '__main__':
     state_dim = 2
     action_dim = 1
     hidden_dim = 32
+    batch_size = 128
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    batch_size = 64
-    states = torch.rand(batch_size, state_dim).to(device)
-    actions = torch.rand(batch_size, action_dim).to(device)
 
-    actor = Actor(state_dim, action_dim, hidden_dim, device)
-    critic = Critic(state_dim, action_dim, hidden_dim, device)
 
-    actions_pred = actor(states)
-    q_values = critic(states, actions)
+    # memory = ReplayBuffer(100000)
+    # for i in range(100000):
+    #     state = np.random.uniform(-1, 1, state_dim)
+    #     action = np.random.uniform(-1, 1, action_dim)
+    #     reward = random.random()
+    #     next_state = np.random.uniform(-1, 1, state_dim)
+    #     terminated = random.choice([True, False])
+    #     memory.push(state, action, reward, next_state, terminated)
 
-    # print(f'Actions: {actions_pred}')
-    # print(f'Q values: {q_values}')
-    low = np.array([-1.0])
-    agent = A2C_agent(state_dim, action_dim, hidden_dim, device, action_low=low)
-    state = np.random.rand(state_dim)
-    action = agent.select_action(state, 0.1)
-    # print(f'State: {state}')
-    # print(f'Action: {action}')
 
-    memory = ReplayBuffer(1000)
-    for i in range(1000):
-        state = np.random.rand(state_dim)
-        action = np.random.uniform(-1, 1, action_dim)
-        reward = random.random()
-        next_state = np.random.rand(state_dim)
-        terminated = random.choice([True, False])
-        memory.push(state, action, reward, next_state, terminated)
+    for k in range(5):
+        agent = AC_agent(state_dim, action_dim, hidden_dim, device)
+        # for i in range(100):
+        #     agent.update(memory, batch_size)
+        selected_actions = []
+        for i in range(1000):
+            state = np.random.uniform(-1,1,state_dim)
+            # state = np.random.rand(state_dim)
+            action = agent.select_action(state, 0.0)
+            # print(action)
+            selected_actions.append(action)
+        print('Update completed')
 
-    agent.update(memory, batch_size)
-    selected_actions = []
-    for i in range(10000):
-        state = np.random.rand(state_dim)
-        action = agent.select_action(state, 0.0)
-        # print(action)
-        selected_actions.append(action)
-    print('Update completed')
+        import matplotlib.pyplot as plt
 
-    import matplotlib.pyplot as plt
-
-    # Crea il plot
-    plt.plot(selected_actions)
-    plt.xlabel('Step')
-    plt.ylabel('First Action Value')
-    plt.title('First Action Value over Time')
-    plt.show()
+        # Crea il plot
+        plt.plot(selected_actions)
+        plt.xlabel('Step')
+        plt.ylabel('First Action Value')
+        plt.title('First Action Value over Time')
+        plt.show()
 
     """Test action clamp """
     # import torch
