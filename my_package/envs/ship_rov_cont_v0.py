@@ -9,16 +9,9 @@ from obstacle_simulation import ShipObstacle
 
 from my_package.core.zeno    import Zeno
 
-class ShipUniContEnv(gym.Env):
-    """Continuous version OF ShipQuestEnv-v5
-    Le differenze principali rispetto alla versione precedente sono:
-    - L'agente è un modello unicycle invece di un modello AUV.
-    - Ci sono due modalità di controllo selezionabili:
-        1) N ACTION = 1: v_surge = costante e yaw_rel [-pi/4, pi/4].
-        2) N ACTION = 2: v_surge [0,max_v_surge] e yaw_rel [-pi/4, pi/4]
-
-    - Introdotte reward negative per collisione e out of bounds proporzionali al numero di step rimanenti
-    per evitare che l'agente si fermi troppo presto.
+class ShipRovContEnv(gym.Env):
+    """Upgrade di ShipUniCont-v1
+    Aggiunta azioni per v_sway
     """
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
@@ -61,7 +54,9 @@ class ShipUniContEnv(gym.Env):
             self.agent_radius           = Options['agent_radius']
             self.frontal_safe_distance  = Options['frontal_safe_distance']
             self.v_surge_max            = Options['v_surge_max']
-            
+            self.v_sway_max             = Options['v_sway_max']
+            self.yaw_rel_max            = Options['yaw_rel_max']
+
             # Parametri del LiDAR
             self.lidar_params   = Options['lidar_params']
             self.draw_lidar     = Options['draw_lidar']
@@ -71,8 +66,7 @@ class ShipUniContEnv(gym.Env):
             self.agent = Zeno(init_pose=self.init_pose, footprint={'radius': self.agent_radius}, lidar_parms=self.lidar_params)
             
             # Definisco il nuemero di azioni disponibili e dimensioni dello stato
-            self.n_actions = Options['n_actions']
-            self.state_dim = 4
+            self.n_actions = 3
 
             # Definisco lo spazio delle azioni
             self.action_low     = - np.ones(self.n_actions)
@@ -80,6 +74,7 @@ class ShipUniContEnv(gym.Env):
             self.action_space   = spaces.Box(low=self.action_low, high=self.action_high, shape=(self.n_actions,), dtype=np.float64)
 
             # Definisco lo spazio delle osservazioni
+            self.state_dim = 6
             self.num_observation = self.state_dim + Options['lidar_params']['n_beams']
             low     = np.zeros(self.num_observation).astype(np.float64)
             high    = np.ones(self.num_observation).astype(np.float64)
@@ -159,24 +154,26 @@ class ShipUniContEnv(gym.Env):
 
         # Salvo le prime 3 componenti dello stato dell'agente e le normalizzo
         state = self.agent.get_state()
-        norm_x =        ( state[0] - self.min_x) / (self.max_x - self.min_x)
-        norm_y =        ( state[1] - self.min_y) / (self.max_y - self.min_y)
-        norm_theta =    ( state[2] + np.pi) / (2*np.pi)
-        norm_omega =    ( 1 + state[5] / self.agent.max_omega ) / 2
-
+        norm_x      = ( state[0] - self.min_x ) / ( self.max_x - self.min_x )
+        norm_y      = ( state[1] - self.min_y ) / ( self.max_y - self.min_y )
+        norm_theta  = ( state[2] + np.pi ) / ( 2*np.pi )
+       
+        norm_v_surge    = ( 1 + state[3] / self.v_surge_max ) / 2
+        norm_v_sway     = ( 1 + state[4] / self.v_sway_max ) / 2
+        norm_omega      = ( 1 + state[5] / self.agent.max_omega ) / 2
 
         # Ottengo i dati del lidar e li normalizzo
         ranges, seen_segments_id = self.agent.lidar(self.Ship)
         norm_ranges = ranges / self.lidar_params['max_range']
 
         # Aggiorno vettore di osservazione
-        
         observation[0]      = norm_x                    # Coordinata x
         observation[1]      = norm_y                    # Coordinata y
         observation[2]      = norm_theta                # Orientamento
-
-        observation[3]      = norm_omega                # Velocità angolare
-        observation[4:]     = norm_ranges               # Dati LiDAR
+        observation[3]      = norm_v_surge              # Velocità di avanzamento
+        observation[4]      = norm_v_sway               # Velocità laterale
+        observation[5]      = norm_omega                # Velocità angolare
+        observation[6:]     = norm_ranges               # Dati LiDAR
 
         return observation, seen_segments_id
     
@@ -222,7 +219,7 @@ class ShipUniContEnv(gym.Env):
         # Dizionario contenente i segmenti che dividono l'ostacolo
         self.segments = self.Ship.copy_segments()
         self.n_segments = len(self.segments)
-
+        self.seen_segments = 0
         # Reimposto l'agente su una posizione casuale in modo che non veda
         # nessun segmento dell'ostacolo all'inizio dell'episodio
         if self.random_init_pose:
@@ -266,19 +263,11 @@ class ShipUniContEnv(gym.Env):
             dict: Un dizionario contenente i controlli necessari per l'agente.
         """
 
-        # yaw_rel tra -pi/4 e pi/4
-        yaw_rel = action[0] * np.pi/4
-        
-        if self.n_actions == 1:
-            v_surge = self.v_surge_max
+        v_surge = action[0] * self.v_surge_max
+        v_sway  = action[1] * self.v_sway_max
+        yaw_rel = action[2] * self.yaw_rel_max
 
-        elif self.n_actions == 2:
-            # v_surge tra 0 e v_surge_max
-            v_surge = (action[1] + 1) / 2 * self.v_surge_max
-        else:
-            raise ValueError("Invalid number of actions. Must be 1 or 2.")
-        
-        controls = {'v_surge': float(v_surge), 'v_sway': 0.0, 'yaw_rel': float(yaw_rel)}
+        controls = {'v_surge': float(v_surge), 'v_sway': float(v_sway), 'yaw_rel': float(yaw_rel)}
         return controls
         
     def segments_check(self, seen_segments_id) -> Tuple[int, bool]:
@@ -329,53 +318,54 @@ class ShipUniContEnv(gym.Env):
         reward = 0.0
         terminated = False
 
-        r_time_step = - 0.01
-        r_new_segment = 0.25
-        r_obstacole_in_FoV = 0.01
-        r_too_close = - 0.025
-        r_collision = - 25
-        r_out_of_bounds = - 25
-        r_time_limit = - 10
-        r_goal = 25
-        r_early_stopping = - 0.01
+        # Reward possibili
+        r_step          = - 0.01
+        r_v_negative    = - 0.01
+        r_new_segment   = 1.0
+        r_collision     = - 25.0
+        r_out_of_bounds = - 25.0
+        r_goal          = 100.0
 
-        # Reward negativa ad ogni step
-        reward += r_time_step
+        # Reward negativa per ogni step
+        reward += r_step
+
+        # Piccola reward negativa per velocità di surge negativa
+        v_surge = self.agent.get_state()[3]
+        if v_surge < 0:
+            reward += r_v_negative * abs(v_surge)
 
         # Calcolo il numero di nuovi segmenti visti e se almeno un segmento è stato visto
-        new_segments_seen, obstacle_in_FoV = self.segments_check(seen_segments_id)
-        reward += new_segments_seen * r_new_segment + obstacle_in_FoV * r_obstacole_in_FoV
+        new_segments_seen, _ = self.segments_check(seen_segments_id)
+        # Reward per i nuovi segmenti visti
+        reward += new_segments_seen * r_new_segment
 
-        # Controllo se l'agente è troppo vicino all'ostacolo
-        if np.min(observation[3:13]) < self.frontal_safe_distance / self.lidar_params['max_range']:
-            reward += r_too_close
-        
-        """ Qui posso usare il metodo zeno.collision_check """
         # Check eventi che terminano l'episodio
-        if self.Ship.point_in_ship(self.agent.get_state()[:2]):
-            remaining_steps = self.max_steps - self.step_count
-            reward += r_collision + r_early_stopping * remaining_steps
-            self.status['collision'] = True
+        # Max steps
+        if self.step_count >= self.max_steps:
+            self.status['time_limit'] = True
             terminated = True
+            return reward, terminated
 
-        elif not self.agent.boundary_check(self.workspace):
-            remaining_steps = self.max_steps - self.step_count
-            reward += r_out_of_bounds + r_early_stopping * remaining_steps
+        # Out of bounds
+        if not self.agent.boundary_check(self.workspace):
+            reward += r_out_of_bounds
             self.status['out_of_bounds'] = True
-            terminated = True
+            terminated = True   
+            return reward, terminated
 
-        elif self.goal_check():
+        # Goal raggiunto
+        if self.goal_check():
             reward += r_goal
             self.status['goal'] = True
             terminated = True
+            return reward, terminated
         
-        elif self.step_count >= self.max_steps:
-            # Reward aggiuntiva proporzionale al coverage del perimetro
-            seen_segments = sum(1 for segment in self.segments.values() if segment.seen)
-            coverage = round(seen_segments / self.n_segments, 2)
-            reward += r_time_limit + coverage * r_goal
-            self.status['time_limit'] = True
+        # Collisione
+        if self.agent.collision_check(self.Ship):
+            reward += r_collision
+            self.status['collision'] = True
             terminated = True
+            return reward, terminated
 
         return reward, terminated    
     
@@ -554,21 +544,22 @@ if __name__ == "__main__":
         'generate_random_ship':             True,
         'ship_perimeter':                   12,
         'workspace_safe_distance':          2,
-        'ship_scale_factor':                2.5,
+        'ship_scale_factor':                0.9,
         'segments_lenght':                  0.25,
         'frame_per_step':                   10,
         'init_pose':                        None,
-        'agent_radius':                     0.5,
-        'v_surge_max':                      0.1,
-        'n_actions':                        2,
+        'agent_radius':                     0.1,
+        'v_surge_max':                      0.2,
+        'v_sway_max':                       0.2,	
+        'yaw_rel_max':                      np.pi/4,
         'frontal_safe_distance':            0.5,
-        'lidar_params':                     {'n_beams': 10, 'max_range': 5.0, 'FoV': np.pi/2},
+        'lidar_params':                     {'n_beams': 10, 'max_range': 2.0, 'FoV': np.pi/2},
         'draw_lidar':                       True,
         'max_steps':                        2000
     }	
 
-    env = ShipUniContEnv(render_mode='human', Options=Options, workspace=(0,0,20,20))
-    # env = gym.make("ShipQuestContinuous-v0", render_mode="human", Options=Options)
+    env = ShipRovContEnv(render_mode='human', Options=Options, workspace=(0,0,8,8))
+    # env = gym.make("ShipRovCont-v0", render_mode="human", Options=Options)
     low = env.action_low
     high = env.action_high
     print(f"Action space: {low} {high}")
@@ -578,10 +569,15 @@ if __name__ == "__main__":
     # Esegui 100 passi casuali
     for _ in range(1000):
         action = env.action_space.sample()  # Esegui un'azione casuale
-        action[0] = 0.0
+        # action[0] = 0.5
+        # action[2] = 0.0
+
         observation, reward, terminated, truncated, info = env.step(action)
-        v_surge = env.agent.get_state()[3]
-        print(v_surge)
+        if info['collision']:
+            print("Collisione")
+            print(info)
+        # v_surge = env.agent.get_state()[3]
+        # print(v_surge)
         # print(action)
         # print(observation)
         if terminated or truncated:

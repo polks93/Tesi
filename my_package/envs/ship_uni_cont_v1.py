@@ -10,15 +10,9 @@ from obstacle_simulation import ShipObstacle
 from my_package.core.zeno    import Zeno
 
 class ShipUniContEnv(gym.Env):
-    """Continuous version OF ShipQuestEnv-v5
+    """Upgrade di ShipUniCont-v0
     Le differenze principali rispetto alla versione precedente sono:
-    - L'agente è un modello unicycle invece di un modello AUV.
-    - Ci sono due modalità di controllo selezionabili:
-        1) N ACTION = 1: v_surge = costante e yaw_rel [-pi/4, pi/4].
-        2) N ACTION = 2: v_surge [0,max_v_surge] e yaw_rel [-pi/4, pi/4]
-
-    - Introdotte reward negative per collisione e out of bounds proporzionali al numero di step rimanenti
-    per evitare che l'agente si fermi troppo presto.
+    - Modifica della funzione di reward, ora è formalizzato come un energia potenziale
     """
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
@@ -72,7 +66,12 @@ class ShipUniContEnv(gym.Env):
             
             # Definisco il nuemero di azioni disponibili e dimensioni dello stato
             self.n_actions = Options['n_actions']
-            self.state_dim = 4
+            if self.n_actions == 1:
+                self.state_dim = 4
+            elif self.n_actions == 2:
+                self.state_dim = 5
+            else:
+                raise ValueError("Invalid number of actions. Must be 1 or 2.")
 
             # Definisco lo spazio delle azioni
             self.action_low     = - np.ones(self.n_actions)
@@ -164,6 +163,8 @@ class ShipUniContEnv(gym.Env):
         norm_theta =    ( state[2] + np.pi) / (2*np.pi)
         norm_omega =    ( 1 + state[5] / self.agent.max_omega ) / 2
 
+        if self.n_actions == 2:
+            norm_v_surge = ( 1 + state[3] / self.v_surge_max) / 2
 
         # Ottengo i dati del lidar e li normalizzo
         ranges, seen_segments_id = self.agent.lidar(self.Ship)
@@ -176,8 +177,15 @@ class ShipUniContEnv(gym.Env):
         observation[2]      = norm_theta                # Orientamento
 
         observation[3]      = norm_omega                # Velocità angolare
-        observation[4:]     = norm_ranges               # Dati LiDAR
+        if self.n_actions == 1:
+            observation[4:]     = norm_ranges               # Dati LiDAR
 
+        elif self.n_actions == 2:
+            observation[4]      = norm_v_surge              # Velocità di avanzamento
+            observation[5:]     = norm_ranges               # Dati LiDAR
+        else:
+            raise ValueError("Invalid number of actions. Must be 1 or 2.")
+        
         return observation, seen_segments_id
     
     def get_info(self) -> Dict[str, Any]:
@@ -222,7 +230,7 @@ class ShipUniContEnv(gym.Env):
         # Dizionario contenente i segmenti che dividono l'ostacolo
         self.segments = self.Ship.copy_segments()
         self.n_segments = len(self.segments)
-
+        self.seen_segments = 0
         # Reimposto l'agente su una posizione casuale in modo che non veda
         # nessun segmento dell'ostacolo all'inizio dell'episodio
         if self.random_init_pose:
@@ -329,54 +337,50 @@ class ShipUniContEnv(gym.Env):
         reward = 0.0
         terminated = False
 
-        r_time_step = - 0.01
-        r_new_segment = 0.25
-        r_obstacole_in_FoV = 0.01
-        r_too_close = - 0.025
-        r_collision = - 25
-        r_out_of_bounds = - 25
-        r_time_limit = - 10
-        r_goal = 25
-        r_early_stopping = - 0.01
+        # Reward possibili
+        r_step          = -0.01
+        r_new_segment   = 1.0
+        r_collision     = - 25.0
+        r_out_of_bounds = - 25.0
+        r_goal          = 100.0
 
-        # Reward negativa ad ogni step
-        reward += r_time_step
+        # Reward negativa per ogni step
+        if self.n_actions >= 1:
+            reward += r_step
 
         # Calcolo il numero di nuovi segmenti visti e se almeno un segmento è stato visto
-        new_segments_seen, obstacle_in_FoV = self.segments_check(seen_segments_id)
-        reward += new_segments_seen * r_new_segment + obstacle_in_FoV * r_obstacole_in_FoV
+        new_segments_seen, _ = self.segments_check(seen_segments_id)
+        # Reward per i nuovi segmenti visti
+        reward += new_segments_seen * r_new_segment
 
-        # Controllo se l'agente è troppo vicino all'ostacolo
-        if np.min(observation[3:13]) < self.frontal_safe_distance / self.lidar_params['max_range']:
-            reward += r_too_close
-        
         """ Qui posso usare il metodo zeno.collision_check """
-        # Check eventi che terminano l'episodio
-        if self.Ship.point_in_ship(self.agent.get_state()[:2]):
-            remaining_steps = self.max_steps - self.step_count
-            reward += r_collision + r_early_stopping * remaining_steps
-            self.status['collision'] = True
+        # Max steps
+        if self.step_count >= self.max_steps:
+            self.status['time_limit'] = True
             terminated = True
-
-        elif not self.agent.boundary_check(self.workspace):
-            remaining_steps = self.max_steps - self.step_count
-            reward += r_out_of_bounds + r_early_stopping * remaining_steps
+            return reward, terminated
+        
+        # Out of bounds
+        if not self.agent.boundary_check(self.workspace):
+            reward += r_out_of_bounds
             self.status['out_of_bounds'] = True
-            terminated = True
-
-        elif self.goal_check():
+            terminated = True   
+            return reward, terminated
+        
+        # Goal raggiunto
+        if self.goal_check():
             reward += r_goal
             self.status['goal'] = True
             terminated = True
-        
-        elif self.step_count >= self.max_steps:
-            # Reward aggiuntiva proporzionale al coverage del perimetro
-            seen_segments = sum(1 for segment in self.segments.values() if segment.seen)
-            coverage = round(seen_segments / self.n_segments, 2)
-            reward += r_time_limit + coverage * r_goal
-            self.status['time_limit'] = True
-            terminated = True
+            return reward, terminated
 
+        # Collisione
+        if self.agent.collision_check(self.Ship):
+            reward += r_collision
+            self.status['collision'] = True
+            terminated = True
+            return reward, terminated       
+    
         return reward, terminated    
     
     def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:

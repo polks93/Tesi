@@ -68,3 +68,15 @@ register(
     entry_point='my_package.envs.ship_uni_cont_v0:ShipUniContEnv',
     max_episode_steps=5000,
 )
+
+register(
+    id='ShipUniCont-v1',
+    entry_point='my_package.envs.ship_uni_cont_v1:ShipUniContEnv',
+    max_episode_steps=5000,
+)
+
+register(
+    id='ShipRovCont-v0',
+    entry_point='my_package.envs.ship_rov_cont_v0:ShipRovContEnv',
+    max_episode_steps=5000,
+)
