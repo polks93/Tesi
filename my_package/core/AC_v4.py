@@ -51,6 +51,16 @@ class ReplayBuffer:
 
 
 def hidden_init(layer):
+    """
+    Inizializza i pesi di un layer con valori casuali all'interno di un intervallo calcolato.
+
+    Args:
+        layer (torch.nn.Module): Il layer di cui inizializzare i pesi.
+    Returns:
+        tuple: Una tupla contenente i limiti inferiore e superiore dell'intervallo di inizializzazione.
+    Notes:
+        L'intervallo è calcolato come (-1/sqrt(fan_in), 1/sqrt(fan_in)), dove fan_in è il numero di unità di input nel layer.
+    """
     fan_in = layer.weight.data.size()[0]
     lim = 1. / np.sqrt(fan_in)
     return (-lim, lim)
@@ -58,10 +68,12 @@ def hidden_init(layer):
 class Actor(nn.Module):
     """
     Classe Actor che rappresenta una rete neurale per apprendimento per rinforzo.
+
     Args:
         state_size (int): Dimensione dello spazio degli stati.
         action_size (int): Dimensione dello spazio delle azioni.
         network_params (dict): Dizionario dei parametri della rete, deve includere 'fc1' e 'fc2'.
+
     Methods:
         forward(state: torch.Tensor) -> torch.Tensor:
             Propaga l'input attraverso la rete e restituisce le azioni.
@@ -209,14 +221,22 @@ class ParamNoise:
             Applica il rumore parametrico ai pesi dell'actor e restituisce l'azione con rumore.
     """
 
-    def __init__(self, state_size: int, action_size: int, actor_params: dict, params: dict) -> None:
+    def __init__(self, state_size: int, action_size: int, actor_params: dict, params: dict, device: torch.device) -> None:
 
         if not 'desired_std' in params or not 'scalar' in params or not 'scalar_decay' in params:
             raise ValueError("Missing noise parameters. Must provide 'desired_std', 'scalar' and 'scalar_decay' values.")
-        
+     
         self.desired_std: float         = params['desired_std']
         self.scalar: float              = params['scalar']
         self.scalar_decay: float        = params['scalar_decay'] 
+
+        if 'decay_with_ep' in params and params['decay_with_ep']:
+            self.decay_with_ep = True
+            self.max_std: float = params['desired_std']
+            self.min_std: float = params['min_std']
+        else:
+            self.decay_with_ep = False
+
         self.actor_noised               = Actor(state_size, action_size, actor_params).to(device)
         self.actor_noised.eval()
 
@@ -259,6 +279,7 @@ class AC_agent():
             self, 
             state_size: int,
             action_size: int,
+            max_episodes: int,
             device: torch.device,
             noise_params: dict, 
             noise_type: str,
@@ -271,6 +292,7 @@ class AC_agent():
         self.device         = device
         self.state_size     = state_size
         self.action_size    = action_size
+        self.max_episodes   = max_episodes
 
         if 'learn_every' not in AC_params or 'n_learn' not in AC_params or 'gamma' not in AC_params or 'tau' not in AC_params or 'lr_actor' not in AC_params or 'lr_critic' not in AC_params:
             raise ValueError("Missing AC parameters. Must provide 'learn_every', 'n_learn', 'gamma', 'tau', 'lr_actor' and 'lr_critic' values.")
@@ -309,7 +331,7 @@ class AC_agent():
             self.ou_noise = OUNoise(size=action_size, noise_params=noise_params)
 
         elif noise_type == 'param':
-            self.param_noise = ParamNoise(state_size, action_size, actor_params, noise_params)
+            self.param_noise = ParamNoise(state_size, action_size, actor_params, noise_params, device)
 
         elif noise_type == 'normal':
             if 'scalar' not in noise_params:
@@ -423,13 +445,20 @@ class AC_agent():
                 elif self.noise_type == 'normal':
                     action_noised = action + self.normal_scalar * np.random.randn(self.action_size)
 
+                action = action_noised
         self.actor.train()
-        return np.clip(action_noised, -1.0, 1.0)
+        return np.clip(action, -1.0, 1.0)
 
-    def reset(self) -> None:
+    def reset(self, episode: int) -> None:
         if self.noise_type == 'ou':
             self.ou_noise.reset()
 
+        elif self.noise_type == 'param' and self.param_noise.decay_with_ep:
+            max_std         = self.param_noise.max_std
+            min_std         = self.param_noise.min_std
+            max_episodes    = self.max_episodes
+            new_std         = np.max([min_std, max_std *(1 - episode / max_episodes)])
+            self.param_noise.desired_std = new_std
 
 
 if __name__ == '__main__':
@@ -442,14 +471,15 @@ if __name__ == '__main__':
 
     AC_params           = {'learn_every': 16, 'n_learn': 16, 'gamma': 0.99, 'tau': 1e-3, 'lr_actor': 1e-3, 'lr_critic': 1e-3}
     buffer_params       = {'buffer_size': int(1e6), 'batch_size': 128}
-    param_noise_params        = {'desired_std': 0.5, 'scalar': 0.05, 'scalar_decay': 0.99}
+    param_noise_params        = {'desired_std': 0.5, 'scalar': 0.05, 'scalar_decay': 0.99, 'min_std': 0.01, 'decay_with_ep': True}
     ou_noise_params           = {'mu': 0.0, 'theta': 0.15, 'sigma': 0.2}
     normal_noise_params       = {'scalar': 0.25}
 
     agent = AC_agent(
-        state_dim, 
-        action_dim, 
-        device, 
+        state_size=state_dim, 
+        action_size=action_dim, 
+        max_episodes=300,
+        device=device, 
         noise_params=param_noise_params,
         noise_type='param',
         AC_params=AC_params,
@@ -459,13 +489,13 @@ if __name__ == '__main__':
     # std = []
     # noise = []
     for ep in range(300):
-        agent.reset()
-        agent.param_noise.desired_std *= 0.99
+        agent.reset(ep)
+        # agent.param_noise.desired_std *= 0.99
         # std.append(agent.ou_noise.sigma)
         # noise.append(agent.ou_noise.sample())
         for step in range(10):
             state = np.random.rand(state_dim)
-            action = agent.act(state)
+            action = agent.act(state, add_noise=False)
             selected_actions.append(action)
             # reward = random.random()
             # next_state = np.random.rand(state_dim)
