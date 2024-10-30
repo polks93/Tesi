@@ -104,7 +104,7 @@ class Critic(nn.Module):
         super(Critic, self).__init__()
 
         self.fc1 = nn.Linear(state_dim, hidden_dim)
-        self.b1 = nn.BatchNorm1d(hidden_dim)
+        self.b1  = nn.BatchNorm1d(hidden_dim)
         self.fc2 = nn.Linear(hidden_dim + action_dim, hidden_dim)
         self.fc3 = nn.Linear(hidden_dim, 1)
 
