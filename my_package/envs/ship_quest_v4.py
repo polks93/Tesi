@@ -9,7 +9,7 @@ from obstacle_simulation import ShipObstacle
 from obstacle_simulation.ship.ship_detection import proximity_sensor
 
 from my_package.core    import Rov
-# from my_package.core    import ShipObstacle
+# from my_package.core    import ShipObstacle 
 # from my_package.core.ship_detection import proximity_sensor
 
 class ShipQuestEnv(gym.Env):

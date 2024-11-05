@@ -1,6 +1,6 @@
 import numpy as np
 import warnings
-from typing import Tuple, Sequence, Optional
+from typing import Tuple, Sequence, Optional, Set
 
 from obstacle_simulation import ShipObstacle, lidar
 
@@ -179,7 +179,7 @@ class Zeno:
             return True
         return False
 
-    def lidar(self, Ship: ShipObstacle) -> Tuple[np.ndarray, set[int]]:
+    def lidar(self, Ship: ShipObstacle) -> Tuple[np.ndarray, Set[int]]:
         """
         Simula un sensore LiDAR per rilevare un ostacolo definito da un oggetto ShipObstacle.
         Args:

@@ -3,7 +3,7 @@ import numpy        as np
 import gymnasium    as gym
 
 from gymnasium  import spaces
-from typing     import Tuple, Dict, Any, Optional, Union
+from typing     import Tuple, Dict, Any, Optional, Union, Set
 
 from obstacle_simulation import ShipObstacle
 
@@ -135,7 +135,7 @@ class ShipRovContEnv(gym.Env):
 
         return np.array([x, y, theta])
     
-    def get_obs(self) -> tuple[np.ndarray, set[int]]:
+    def get_obs(self) -> Tuple[np.ndarray, Set[int]]:
         """
         Restituisce l'osservazione corrente dell'ambiente.
 
@@ -188,11 +188,11 @@ class ShipRovContEnv(gym.Env):
         seen_segments = sum(1 for segment in self.segments.values() if segment.seen)
         coverage = round(seen_segments / self.n_segments * 100, 2)
 
-        info = self.status | {'coverage' : coverage}
-        
+        # info = self.status | {'coverage' : coverage}
+        info = {**self.status, 'coverage': coverage}
         return info   
     
-    def reset(self, *, seed: int | None = None, options: Dict[str, Any] | None = None)-> Tuple[np.ndarray, Dict[str, Any]]:
+    def reset(self, *, seed: Union[int, None] = None, options: Union[Dict[str, Any], None] = None)-> Tuple[np.ndarray, Dict[str, Any]]:
         
         """
         Reimposta l'ambiente a uno stato iniziale, restituendo un'osservazione iniziale e informazioni.
@@ -252,7 +252,7 @@ class ShipRovContEnv(gym.Env):
 
         return observation, info   
     
-    def action_to_controls(self, action: np.ndarray) -> dict:
+    def action_to_controls(self, action: np.ndarray) -> Dict:
         """
         Converte l'azione scelta dall'agente nei controlli necessari per l'agente.
         L'azione relativa allo yaw è un valore tra -1 e 1 che viene prima convertito in -pi/4 e pi/4. 
@@ -304,7 +304,7 @@ class ShipRovContEnv(gym.Env):
         """
         return all([segment.seen for segment in self.segments.values()])
     
-    def get_reward(self, observation: np.ndarray, seen_segments_id: set[int]) -> Tuple[float, bool]:
+    def get_reward(self, observation: np.ndarray, seen_segments_id: Set[int]) -> Tuple[float, bool]:
         """
         Calcola il reward per l'agente basato sull'osservazione corrente e verifica se l'episodio è terminato.
         Args:

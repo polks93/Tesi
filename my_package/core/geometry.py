@@ -63,21 +63,20 @@ def generate_segments_for_side(
     side_length = np.linalg.norm(end_point - start_point)
     num_segments = int(np.ceil(side_length / segment_length))
 
-    match(side):
-        case 'bottom':
-            start_neighbor = 'left'
-            end_neighbor = 'right'
-        case 'top':
-            start_neighbor = 'left'
-            end_neighbor = 'right'
-        case 'left':
-            start_neighbor = 'bottom'
-            end_neighbor = 'top'
-        case 'right':
-            start_neighbor = 'bottom'
-            end_neighbor = 'top'
-        case _:
-            raise ValueError(f"Invalid side: {side}. Valid sides are: {Segment.metadata['valid_sides']}")
+    if side == 'bottom':
+        start_neighbor = 'left'
+        end_neighbor = 'right'
+    elif side == 'top':
+        start_neighbor = 'left'
+        end_neighbor = 'right'
+    elif side == 'left':
+        start_neighbor = 'bottom'
+        end_neighbor = 'top'
+    elif side == 'right':
+        start_neighbor = 'bottom'
+        end_neighbor = 'top'
+    else:
+        raise ValueError(f"Invalid side: {side}. Valid sides are: {Segment.metadata['valid_sides']}")
 
     # Aggiusto la lunghezze dei segmenti in caso length non sia un multiplo di segment_length
     if num_segments > 0:
@@ -350,21 +349,20 @@ def is_segment_visible(pose: Union[Sequence, np.ndarray], segment: Segment, obst
 
     # Cerco un intersezione tra la linea di vista e gli altri lati dell'ostacolo
     for side in obstacle_sides:
-        match(side):
-            case 'bottom':
-                P1 = (obstacle[0], obstacle[1])
-                P2 = (obstacle[2], obstacle[1])
-            case 'top':
-                P1 = (obstacle[0], obstacle[3])
-                P2 = (obstacle[2], obstacle[3])
-            case 'left':
-                P1 = (obstacle[0], obstacle[1])
-                P2 = (obstacle[0], obstacle[3])
-            case 'right':
-                P1 = (obstacle[2], obstacle[1])
-                P2 = (obstacle[2], obstacle[3])
-            case _:
-                raise ValueError(f"Invalid side: {side}. Valid sides are: {obstacle_sides}")
+        if side == 'bottom':
+            P1 = (obstacle[0], obstacle[1])
+            P2 = (obstacle[2], obstacle[1])
+        elif side == 'top':
+            P1 = (obstacle[0], obstacle[3])
+            P2 = (obstacle[2], obstacle[3])
+        elif side == 'left':
+            P1 = (obstacle[0], obstacle[1])
+            P2 = (obstacle[0], obstacle[3])
+        elif side == 'right':
+            P1 = (obstacle[2], obstacle[1])
+            P2 = (obstacle[2], obstacle[3])
+        else:
+            raise ValueError(f"Invalid side: {side}. Valid sides are: {obstacle_sides}")
         if segments_intersect(line_of_sight, (P1, P2)):
             return False
 

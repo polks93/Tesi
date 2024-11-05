@@ -155,7 +155,7 @@ def discretize_lidar(pose: np.ndarray, lidar_params: dict, obstacle: Sequence, s
 
     return occupied_sectors, collision_alert
 
-def proximity_sensor(pose: np.ndarray, heading: float, max_range: float, obstacle: Sequence, return_type: Optional[str] = 'binary') -> int | float:
+def proximity_sensor(pose: np.ndarray, heading: float, max_range: float, obstacle: Sequence, return_type: Optional[str] = 'binary') -> Union[int, float]:
     """
     Simula un sensore di prossimità binario che rileva ostacoli entro una distanza di sicurezza.
     Args:
@@ -165,7 +165,7 @@ def proximity_sensor(pose: np.ndarray, heading: float, max_range: float, obstacl
         obstacle (Sequence): La rappresentazione dell'ostacolo come una sequenza di coordinate.
         return_type (Optional[str]): Il tipo di valore restituito dal sensore di prossimità. Può essere 'binary' (default) o 'range'.
     Returns:
-        int | float: Un valore binario o una distanza, a seconda del tipo di valore restituito richiesto.
+        (int, float): Un valore binario o una distanza, a seconda del tipo di valore restituito richiesto.
     """
     valid_return_types = ['binary', 'range']
     if return_type not in valid_return_types:
@@ -175,24 +175,22 @@ def proximity_sensor(pose: np.ndarray, heading: float, max_range: float, obstacl
 
 
     if distance is not None and distance <= max_range:
+        
+        if return_type == 'range':
+            return distance
+        elif return_type == 'binary':
+            return 1
+        else:
+            return 1
 
-        match(return_type):
-            case 'range':
-                return distance
-            case 'binary':
-                return 1
-            case _:
-                return 1
-            
     else:
 
-        match(return_type):
-            case 'range':
-                return max_range
-            case 'binary':
-                return 0
-            case _:
-                return 0
+        if return_type == 'range':
+            return max_range
+        elif return_type == 'binary':
+            return 0
+        else:
+            return 0
 
 if __name__ == "__main__":
     # Define the pose of the lidar sensor

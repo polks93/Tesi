@@ -1,6 +1,6 @@
 import numpy as np
 import warnings
-from typing import Tuple, Sequence, Optional
+from typing import Tuple, Sequence, Optional, List, Set
 
 # from my_package.core import ShipObstacle
 # from my_package.core.ship_detection import lidar
@@ -70,7 +70,7 @@ class Rov:
             return - max_value, True
         return value, False
     
-    def zeno_kinematics(self, dvx: float, dvy: float, domega: float, dt: float=1.0) -> list[bool]:
+    def zeno_kinematics(self, dvx: float, dvy: float, domega: float, dt: float=1.0) -> List[bool]:
         """
         Muove il ROV usando la cinematica di Zeno.
         Args:
@@ -168,7 +168,7 @@ class Rov:
             return True
         return False
         
-    def lidar(self, Ship: ShipObstacle) -> Tuple[np.ndarray, set[int]]:
+    def lidar(self, Ship: ShipObstacle) -> Tuple[np.ndarray, Set[int]]:
         """
         Simula un sensore LiDAR per rilevare un ostacolo definito da un oggetto ShipObstacle.
         Args:
