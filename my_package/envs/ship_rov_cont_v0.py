@@ -107,7 +107,7 @@ class ShipRovContEnv(gym.Env):
         Returns:
             Tuple: Una tupla contenente le coordinate x, y e l'angolo theta del punto di spawn.
         """
-        distance_from_boundary = 0.5
+        distance_from_boundary = 1.0
         possible_spawn_points_x = np.linspace(self.min_x + distance_from_boundary, self.max_x - distance_from_boundary, 100)
         possible_spawn_points_y = np.linspace(self.min_y + distance_from_boundary, self.max_y - distance_from_boundary, 100)
 
@@ -558,8 +558,8 @@ if __name__ == "__main__":
         'max_steps':                        2000
     }	
 
-    env = ShipRovContEnv(render_mode='human', Options=Options, workspace=(0,0,8,8))
-    # env = gym.make("ShipRovCont-v0", render_mode="human", Options=Options)
+    # env = ShipRovContEnv(render_mode='human', Options=Options, workspace=(0,0,8,8))
+    env = gym.make("ShipRovCont-v0", render_mode="human", Options=Options, workspace=(0, 0, 18, 18))
     low = env.action_low
     high = env.action_high
     print(f"Action space: {low} {high}")
