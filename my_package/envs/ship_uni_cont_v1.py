@@ -558,8 +558,8 @@ if __name__ == "__main__":
     Options = {
         'generate_random_ship':             True,
         'ship_perimeter':                   12,
-        'workspace_safe_distance':          2,
-        'ship_scale_factor':                2.5,
+        'workspace_safe_distance':          5,
+        'ship_scale_factor':                2.0,
         'segments_lenght':                  0.25,
         'frame_per_step':                   10,
         'init_pose':                        None,
@@ -572,8 +572,8 @@ if __name__ == "__main__":
         'max_steps':                        2000
     }	
 
-    env = ShipUniContEnv(render_mode='human', Options=Options, workspace=(0,0,20,20))
-    # env = gym.make("ShipQuestContinuous-v0", render_mode="human", Options=Options)
+    # env = ShipUniContEnv(render_mode='human', Options=Options, workspace=(0,0,20,20))
+    env = gym.make("ShipUniCont-v1", render_mode="human", Options=Options, workspace=(0,0,20,20))
     low = env.action_low
     high = env.action_high
     print(f"Action space: {low} {high}")
