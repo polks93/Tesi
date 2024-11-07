@@ -40,13 +40,7 @@ class ShipRovContEnv(gym.Env):
             self.max_y = workspace[3]
             self.ws_center = ((self.max_x - self.min_x) / 2, (self.max_y - self.min_y) / 2)
 
-            # Inizializzo agente
-            if Options['init_pose'] is None:
-                self.init_pose = self.get_random_init_pose()
-                self.random_init_pose = True
-            else:
-                self.init_pose = np.array(Options['init_pose'])
-                self.random_init_pose = False
+
 
             # Parametri agente
             self.dt                     = 1.0 / self.metadata["render_fps"]
@@ -56,7 +50,16 @@ class ShipRovContEnv(gym.Env):
             self.v_surge_max            = Options['v_surge_max']
             self.v_sway_max             = Options['v_sway_max']
             self.yaw_rel_max            = Options['yaw_rel_max']
+            self.distance_from_boundary = 3 * self.agent_radius 
 
+            # Inizializzo agente
+            if Options['init_pose'] is None:
+                self.init_pose = self.get_random_init_pose()
+                self.random_init_pose = True
+            else:
+                self.init_pose = np.array(Options['init_pose'])
+                self.random_init_pose = False
+                
             # Parametri del LiDAR
             self.lidar_params   = Options['lidar_params']
             self.draw_lidar     = Options['draw_lidar']
@@ -107,7 +110,7 @@ class ShipRovContEnv(gym.Env):
         Returns:
             Tuple: Una tupla contenente le coordinate x, y e l'angolo theta del punto di spawn.
         """
-        distance_from_boundary = 1.0
+        distance_from_boundary = self.distance_from_boundary
         possible_spawn_points_x = np.linspace(self.min_x + distance_from_boundary, self.max_x - distance_from_boundary, 100)
         possible_spawn_points_y = np.linspace(self.min_y + distance_from_boundary, self.max_y - distance_from_boundary, 100)
 
@@ -543,23 +546,23 @@ if __name__ == "__main__":
     Options = {
         'generate_random_ship':             True,
         'ship_perimeter':                   12,
-        'workspace_safe_distance':          2,
-        'ship_scale_factor':                0.9,
+        'workspace_safe_distance':          5,
+        'ship_scale_factor':                2.0,
         'segments_lenght':                  0.25,
         'frame_per_step':                   10,
         'init_pose':                        None,
-        'agent_radius':                     0.1,
+        'agent_radius':                     0.75,
         'v_surge_max':                      0.2,
         'v_sway_max':                       0.2,	
         'yaw_rel_max':                      np.pi/4,
         'frontal_safe_distance':            0.5,
-        'lidar_params':                     {'n_beams': 10, 'max_range': 2.0, 'FoV': np.pi/2},
+        'lidar_params':                     {'n_beams': 10, 'max_range': 5.0, 'FoV': np.pi/2},
         'draw_lidar':                       True,
         'max_steps':                        2000
     }	
 
     # env = ShipRovContEnv(render_mode='human', Options=Options, workspace=(0,0,8,8))
-    env = gym.make("ShipRovCont-v0", render_mode="human", Options=Options, workspace=(0, 0, 18, 18))
+    env = gym.make("ShipRovCont-v0", render_mode="human", Options=Options, workspace=(0, 0, 20, 20))
     low = env.action_low
     high = env.action_high
     print(f"Action space: {low} {high}")
