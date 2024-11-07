@@ -3,7 +3,7 @@ import numpy        as np
 import gymnasium    as gym
 
 from gymnasium  import spaces
-from typing     import Tuple, Dict, Any, Optional, Union
+from typing     import Tuple, Dict, Any, Optional, Union, Set
 
 from obstacle_simulation import ShipObstacle
 
@@ -139,7 +139,7 @@ class ShipUniContEnv(gym.Env):
 
         return np.array([x, y, theta])
     
-    def get_obs(self) -> tuple[np.ndarray, set[int]]:
+    def get_obs(self) -> Tuple[np.ndarray, Set[int]]:
         """
         Restituisce l'osservazione corrente dell'ambiente.
 
@@ -199,11 +199,12 @@ class ShipUniContEnv(gym.Env):
         seen_segments = sum(1 for segment in self.segments.values() if segment.seen)
         coverage = round(seen_segments / self.n_segments * 100, 2)
 
-        info = self.status | {'coverage' : coverage}
-        
+        # info = self.status | {'coverage' : coverage}
+        info = {**self.status, 'coverage': coverage}
+
         return info   
     
-    def reset(self, *, seed: int | None = None, options: Dict[str, Any] | None = None)-> Tuple[np.ndarray, Dict[str, Any]]:
+    def reset(self, *, seed: Union[int, None] = None, options: Union[Dict[str, Any], None] = None)-> Tuple[np.ndarray, Dict[str, Any]]:
         
         """
         Reimposta l'ambiente a uno stato iniziale, restituendo un'osservazione iniziale e informazioni.
@@ -263,7 +264,7 @@ class ShipUniContEnv(gym.Env):
 
         return observation, info   
     
-    def action_to_controls(self, action: np.ndarray) -> dict:
+    def action_to_controls(self, action: np.ndarray) -> Dict:
         """
         Converte l'azione scelta dall'agente nei controlli necessari per l'agente.
         L'azione relativa allo yaw è un valore tra -1 e 1 che viene prima convertito in -pi/4 e pi/4. 
@@ -323,7 +324,7 @@ class ShipUniContEnv(gym.Env):
         """
         return all([segment.seen for segment in self.segments.values()])
     
-    def get_reward(self, observation: np.ndarray, seen_segments_id: set[int]) -> Tuple[float, bool]:
+    def get_reward(self, observation: np.ndarray, seen_segments_id: Set[int]) -> Tuple[float, bool]:
         """
         Calcola il reward per l'agente basato sull'osservazione corrente e verifica se l'episodio è terminato.
         Args:
@@ -353,34 +354,34 @@ class ShipUniContEnv(gym.Env):
         # Reward per i nuovi segmenti visti
         reward += new_segments_seen * r_new_segment
 
-        """ Qui posso usare il metodo zeno.collision_check """
+        # Check eventi che terminano l'episodio
         # Max steps
         if self.step_count >= self.max_steps:
             self.status['time_limit'] = True
             terminated = True
             return reward, terminated
-        
+
         # Out of bounds
         if not self.agent.boundary_check(self.workspace):
             reward += r_out_of_bounds
             self.status['out_of_bounds'] = True
             terminated = True   
             return reward, terminated
-        
+
         # Goal raggiunto
         if self.goal_check():
             reward += r_goal
             self.status['goal'] = True
             terminated = True
             return reward, terminated
-
+        
         # Collisione
         if self.agent.collision_check(self.Ship):
             reward += r_collision
             self.status['collision'] = True
             terminated = True
-            return reward, terminated       
-    
+            return reward, terminated
+
         return reward, terminated    
     
     def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
