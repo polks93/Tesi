@@ -332,9 +332,9 @@ class ShipUniContEnv(gym.Env):
         reward += r_step
 
         # Piccola reward negativa per velocità di surge negativa
-        v_surge = self.agent.get_state()[3]
-        if v_surge < 0:
-            reward += r_v_negative * abs(v_surge)
+        # v_surge = self.agent.get_state()[3]
+        # if v_surge < 0:
+        #     reward += r_v_negative * abs(v_surge)
 
         # Calcolo il numero di nuovi segmenti visti e se almeno un segmento è stato visto
         new_segments_seen, _ = self.segments_check(seen_segments_id)
