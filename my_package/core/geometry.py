@@ -287,18 +287,24 @@ def generate_random_obstacle(perimeter: int, workspace: Sequence, safe_distance:
         raise ValueError("L'area di lavoro è troppo piccola per applicare la distanza di sicurezza.")
 
     while True:
-        height = np.random.randint(1, (perimeter // 2))
-        width = (perimeter // 2) - height
-        
-        if width <= (safe_xmax - safe_xmin) and height <= (safe_ymax - safe_ymin):
+        while True:
+            height = np.random.randint(1, (perimeter // 2))
+            width = (perimeter // 2) - height
+            
+            if width <= (safe_xmax - safe_xmin) and height <= (safe_ymax - safe_ymin):
+                break
+
+        rect_xmin = np.random.randint(safe_xmin, safe_xmax - width + 1)
+        rect_ymin = np.random.randint(safe_ymin, safe_ymax - height + 1)
+
+        rect_xmax = rect_xmin + width
+        rect_ymax = rect_ymin + height
+
+        if rect_xmax <= safe_xmax and rect_ymax <= safe_ymax and rect_xmin >= safe_xmin and rect_ymin >= safe_ymin:
             break
 
-    rect_xmin = np.random.randint(safe_xmin, safe_xmax - width + 1)
-    rect_ymin = np.random.randint(safe_ymin, safe_ymax - height + 1)
 
-    rect_xmax = rect_xmin + width
-    rect_ymax = rect_ymin + height
-
+        
     return (rect_xmin, rect_ymin, rect_xmax, rect_ymax)
 
 def segments_intersect(segment1: Union[Sequence, np.ndarray], segment2: Union[Sequence, np.ndarray]) -> bool:
@@ -420,6 +426,22 @@ if __name__ == "__main__":
         ax.set_xlim(wxmin, wxmax)
         ax.set_ylim(wymin, wymax)
 
+        # Disegna il rettangolo dell'area di lavoro
+        # Lato inferiore
+        sxmin = wxmin + safe_distance
+        symin = wymin + safe_distance
+        sxmax = wxmax - safe_distance
+        symax = wymax - safe_distance
+
+        # ax.plot([sxmin, sxmax], [symin, symin], color='b', linewidth=2)
+        # # Lato superiore
+        # ax.plot([sxmin, sxmax], [symax, symax], color='b', linewidth=2)
+        # # Lato sinistro
+        # ax.plot([sxmin, sxmin], [symin, symax], color='b', linewidth=2)
+        # # Lato destro
+        # ax.plot([sxmax, sxmax], [symin, symax], color='b', linewidth=2)
+
+
         # Disegna le 4 linee del rettangolo
         # Lato inferiore
         ax.plot([rxmin, rxmax], [rymin, rymin], color='r', linewidth=2)
@@ -431,11 +453,11 @@ if __name__ == "__main__":
         ax.plot([rxmax, rxmax], [rymin, rymax], color='r', linewidth=2)
 
         # Etichetta degli assi e titolo
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_title('Perimetro del rettangolo all\'interno dell\'area di lavoro')
+        ax.set_xlabel('X [m]')
+        ax.set_ylabel('Y [m]')
+        ax.set_title('Posizione dell\'ostacolo')
 
         # Mostra la griglia e il grafico
-        ax.grid(True)
+        # ax.grid(True)
         plt.gca().set_aspect('equal', adjustable='box')
         plt.show()
