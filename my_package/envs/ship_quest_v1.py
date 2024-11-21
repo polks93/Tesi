@@ -410,6 +410,27 @@ class ShipQuestEnv(gym.Env):
 
         return observation, reward, terminated, truncated, info
 
+    def draw_spawn(self) -> None:
+        length_pixel_x = round((self.max_x - self.min_x - 1) * self.scale)
+        length_pixel_y = round((self.max_y - self.min_y - 1) * self.scale)
+        spawn_rect = (
+            round((0.5 - self.min_x) * self.scale),
+            self.screen_size[1] - round((self.max_y - 0.5 - self.min_y) * self.scale),
+            length_pixel_x,
+            length_pixel_y
+        )
+        pygame.draw.rect(self.surf, (0, 255, 0), spawn_rect, width=2)
+
+    def draw_obstacle_safe_distance(self) -> None:
+        length_pixel_x = round((self.max_x - self.min_x - 2*self.workspace_safe_distance) * self.scale)
+        length_pixel_y = round((self.max_y - self.min_y - 2*self.workspace_safe_distance) * self.scale)
+        safe_rect = (
+            round((self.workspace_safe_distance - self.min_x) * self.scale),
+            self.screen_size[1] - round((self.max_y - self.workspace_safe_distance - self.min_y) * self.scale),
+            length_pixel_x,
+            length_pixel_y
+        )
+        pygame.draw.rect(self.surf, (0, 100, 255), safe_rect, width=2)
 
     def draw_ship(self) -> None:
         """
@@ -525,6 +546,9 @@ class ShipQuestEnv(gym.Env):
 
         # Disegna su self.surf
         self.draw_ship()
+
+        # self.draw_spawn()
+        # self.draw_obstacle_safe_distance()
         self.draw_agent()
         # self.surf = pygame.transform.flip(self.surf, False, True)
         self.screen.blit(self.surf, (0, 0))
@@ -549,7 +573,7 @@ if __name__ == "__main__":
     Options = {
         'generate_random_ship':             True,
         'ship_perimeter':                   12,
-        'workspace_safe_distance':          2,
+        'workspace_safe_distance':          1.5,
         'segments_lenght':                  0.25,
         'n_actions':                        3,
         'use_lateral_proximity_sensor':     True,
